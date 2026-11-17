@@ -64,8 +64,8 @@ function SignInPage() {
               Sign in
             </Button>
             {notice && (
-              <p role="status" className="flex gap-3 rounded-[2px] border border-gold/60 bg-paper p-4 text-sm leading-relaxed">
-                <Info className="mt-0.5 size-4 shrink-0 text-gold-deep" aria-hidden />
+              <p role="status" className="flex gap-3 rounded-[2px] border border-primary/25 bg-paper p-4 text-sm leading-relaxed">
+                <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
                 {notice}
               </p>
             )}

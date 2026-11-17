@@ -5,6 +5,7 @@ import { Eraser, Play, Volume2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { usePiano } from "@/lib/music/usePiano";
+import { useMusic } from "@/lib/music/useMusic";
 import {
   INTERVALS,
   ORDINALS,
@@ -32,6 +33,7 @@ const EASE = [0.22, 1, 0.36, 1] as const;
 
 export function Instrument() {
   const piano = usePiano();
+  const music = useMusic();
   const [mode, setMode] = useState<Mode>("play");
   const [pressed, setPressed] = useState<Set<string>>(new Set());
   const [sounding, setSounding] = useState<string[]>([]);
@@ -123,7 +125,10 @@ export function Instrument() {
     piano.playPhrase(steps, (s) => setSounding(s?.notes ?? []));
   };
 
-  const activeNotes = useMemo(() => new Set([...pressed, ...sounding]), [pressed, sounding]);
+  const activeNotes = useMemo(
+    () => new Set([...pressed, ...sounding, ...music.notes]),
+    [pressed, sounding, music.notes],
+  );
 
   const highlightNotes = useMemo(() => {
     const reading = readIndex !== null ? TREBLE_READING[readIndex] : undefined;
@@ -180,7 +185,7 @@ export function Instrument() {
                 type="checkbox"
                 checked={showLabels}
                 onChange={(e) => setShowLabels(e.target.checked)}
-                className="size-3.5 accent-[var(--burgundy-soft)]"
+                className="size-3.5 accent-[var(--primary-soft)]"
               />
               Note names
             </label>
@@ -222,7 +227,7 @@ export function Instrument() {
                 transition={{ duration: 0.35, ease: EASE }}
                 aria-live="polite"
               >
-                <p className="eyebrow mb-4 text-gold">{MODES.find((m) => m.id === mode)?.hint}</p>
+                <p className="eyebrow mb-4 text-crimson-soft">{MODES.find((m) => m.id === mode)?.hint}</p>
                 {mode === "play" && <PlayReadout note={lastPlayed} />}
                 {mode === "read" && (
                   <ReadReadout index={readIndex} miss={readMiss} />
@@ -273,7 +278,7 @@ export function Instrument() {
                   className={cn(
                     "rounded-[2px] border px-2 py-2.5 text-center transition-colors",
                     i.id === intervalId
-                      ? "border-burgundy-soft bg-primary text-primary-foreground"
+                      ? "border-primary-soft bg-primary text-primary-foreground"
                       : "border-ink-border text-ink-muted hover:border-ink-muted hover:text-ink-foreground",
                   )}
                 >
@@ -290,7 +295,7 @@ export function Instrument() {
         {/* Keyboard */}
         <div className="border-t border-ink-border bg-ink-deep px-2 pt-3 pb-4 md:px-5 md:pb-6">
           <div className="mb-3 flex items-center justify-between px-1">
-            <span className="h-px flex-1 bg-gradient-to-r from-transparent via-gold/50 to-transparent" />
+            <span className="h-px flex-1 bg-gradient-to-r from-transparent via-crimson/50 to-transparent" />
           </div>
           <Piano
             className="h-44 md:h-52"

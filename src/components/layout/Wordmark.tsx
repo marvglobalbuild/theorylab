@@ -20,7 +20,7 @@ export function Wordmark({ className, inverse = false }: { className?: string; i
     <span className={cn("inline-flex items-center gap-2.5", className)}>
       <Mark />
       <span className="font-display text-[1.15rem] font-semibold tracking-[0.3em]">
-        THEORY<span className={inverse ? "text-burgundy-soft" : "text-primary"}>LAB</span>
+        THEORY<span className={inverse ? "text-primary-soft" : "text-primary"}>LAB</span>
       </span>
     </span>
   );

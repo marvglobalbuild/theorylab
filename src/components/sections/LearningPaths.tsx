@@ -68,7 +68,7 @@ export function LearningPaths() {
               <Accordion.Item value={level.id} className="group/item border-b border-border">
                 <Accordion.Header>
                   <Accordion.Trigger className="grid w-full grid-cols-[3.5rem_1fr_auto] items-start gap-x-4 py-7 text-left transition-colors md:grid-cols-[5rem_1fr_auto_auto] md:gap-x-8 md:py-9">
-                    <span className="font-display text-4xl leading-none text-gold-deep transition-colors group-data-[state=open]/item:text-primary md:text-5xl">
+                    <span className="font-display text-4xl leading-none text-crimson-deep transition-colors group-data-[state=open]/item:text-primary md:text-5xl">
                       {level.numeral}
                     </span>
                     <span>

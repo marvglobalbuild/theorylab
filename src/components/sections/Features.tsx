@@ -1,5 +1,5 @@
-import { ArrowRight } from "lucide-react";
-import type { ReactNode } from "react";
+import { ArrowRight, Play } from "lucide-react";
+import { useState, type ReactNode } from "react";
 
 import scoreImage from "@/assets/score-detail.jpg";
 import { Reveal, RevealImage } from "@/components/motion/Reveal";
@@ -7,6 +7,7 @@ import { SectionLink } from "@/components/layout/SectionLink";
 import { KeysGlyph } from "@/components/music/Illustrations";
 import { SECTION_IDS } from "@/content/site";
 import { cn } from "@/lib/utils";
+import { usePiano, type PhraseStep } from "@/lib/music/usePiano";
 import { EarTrainingDemo } from "./EarTrainingDemo";
 import { SectionHeading } from "./SectionHeading";
 
@@ -27,7 +28,7 @@ function Feature({
 }) {
   return (
     <Reveal className={cn("flex flex-col p-6 md:p-10", inverse ? "bg-ink text-ink-foreground" : "bg-paper", className)}>
-      <span className={cn("text-xs tabular-nums", inverse ? "text-gold" : "text-gold-deep")}>{index}</span>
+      <span className={cn("text-xs tabular-nums", inverse ? "text-crimson-soft" : "text-crimson-deep")}>{index}</span>
       <h3 className="type-display-md mt-4">{title}</h3>
       <p className={cn("mt-3 max-w-sm text-[0.95rem] leading-relaxed", inverse ? "text-ink-muted" : "text-muted-foreground")}>
         {body}
@@ -63,47 +64,105 @@ function LineNames() {
   );
 }
 
+const CADENCE = [
+  { numeral: "I", name: "C", notes: ["C3", "C4", "E4", "G4"] },
+  { numeral: "IV", name: "F", notes: ["F3", "C4", "F4", "A4"] },
+  { numeral: "V⁷", name: "G⁷", notes: ["G2", "B3", "F4", "G4"] },
+  { numeral: "I", name: "C", notes: ["C3", "C4", "E4", "G4"] },
+];
+
+function PlayChip({ onClick, children, label }: { onClick: () => void; children: ReactNode; label?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
+    >
+      <Play className="size-3" aria-hidden /> {children}
+    </button>
+  );
+}
+
 function Progression() {
-  const chords = [
-    { numeral: "I", name: "C" },
-    { numeral: "IV", name: "F" },
-    { numeral: "V⁷", name: "G⁷" },
-    { numeral: "I", name: "C" },
-  ];
+  const piano = usePiano();
+  const [lit, setLit] = useState<number | null>(null);
+  const playChord = (i: number) =>
+    piano.playPhrase([{ notes: CADENCE[i]!.notes, at: 0, duration: 1.4 }], (s) => setLit(s ? i : null));
+  const playAll = () => {
+    const steps: PhraseStep[] = CADENCE.map((c, i) => ({ notes: c.notes, at: i * 1.1, duration: i === 3 ? 2.2 : 1.05 }));
+    piano.playPhrase(steps, (s) => setLit(s ? steps.indexOf(s) : null));
+  };
   return (
     <div className="mt-auto pt-10">
       <div className="grid grid-cols-4 border-y border-border">
-        {chords.map((c, i) => (
-          <div key={i} className={cn("py-5 text-center", i > 0 && "border-l border-border")}>
-            <span className={cn("block font-display text-4xl md:text-5xl", i >= 2 ? "text-primary" : "text-foreground")}>
+        {CADENCE.map((c, i) => (
+          <button
+            key={i}
+            type="button"
+            onClick={() => playChord(i)}
+            aria-label={`Play chord ${c.numeral}, ${c.name}`}
+            className={cn(
+              "py-5 text-center transition-colors hover:bg-primary/5",
+              i > 0 && "border-l border-border",
+              lit === i && "bg-primary/10",
+            )}
+          >
+            <span
+              className={cn(
+                "block font-display text-4xl transition-colors md:text-5xl",
+                lit === i ? "text-primary" : i >= 2 ? "text-crimson" : "text-foreground",
+              )}
+            >
               {c.numeral}
             </span>
             <span className="mt-1 block text-xs text-muted-foreground">{c.name}</span>
-          </div>
+          </button>
         ))}
       </div>
-      <p className="mt-3 text-xs text-muted-foreground">
-        In C major. The last two chords, V⁷–I, form a perfect cadence.
-      </p>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs text-muted-foreground">In C major. V⁷–I closes with a perfect cadence. Tap any chord.</p>
+        <PlayChip onClick={playAll}>Play progression</PlayChip>
+      </div>
     </div>
   );
 }
 
+// One bar of 4/4: crotchet, two quavers, crotchet, crotchet (beats sum to 4)
+const RHYTHM = [
+  { beats: 1, label: "Crotchet" },
+  { beats: 0.5, label: "Quaver" },
+  { beats: 0.5, label: "Quaver" },
+  { beats: 1, label: "Crotchet" },
+  { beats: 1, label: "Crotchet" },
+];
+const BEAT = 0.5; // seconds — ♩ = 120
+
 function RhythmBar() {
-  // One bar of 4/4: crotchet, two quavers, crotchet, crotchet (beats sum to 4)
-  const values = [
-    { beats: 1, label: "Crotchet" },
-    { beats: 0.5, label: "Quaver" },
-    { beats: 0.5, label: "Quaver" },
-    { beats: 1, label: "Crotchet" },
-    { beats: 1, label: "Crotchet" },
-  ];
+  const piano = usePiano();
+  const [lit, setLit] = useState<number | null>(null);
+  const play = () => {
+    let at = 0;
+    const steps: PhraseStep[] = [];
+    for (let rep = 0; rep < 2; rep++) {
+      RHYTHM.forEach((v) => {
+        steps.push({ notes: ["G4"], at, duration: v.beats * BEAT * 0.85 });
+        at += v.beats * BEAT;
+      });
+    }
+    piano.playPhrase(steps, (s) => setLit(s ? steps.indexOf(s) % RHYTHM.length : null));
+  };
   return (
     <div className="mt-auto pt-10">
       <div className="flex items-end gap-1" aria-hidden>
-        {values.map((v, i) => (
+        {RHYTHM.map((v, i) => (
           <div key={i} style={{ flexGrow: v.beats }} className="basis-0">
-            <div className={cn("h-10 rounded-[2px]", v.beats < 1 ? "bg-primary/80" : "bg-foreground/85")} />
+            <div
+              className={cn(
+                "h-10 rounded-[2px] transition-[background-color,transform] duration-150",
+                lit === i ? "-translate-y-1 bg-crimson" : v.beats < 1 ? "bg-primary/75" : "bg-foreground/85",
+              )}
+            />
           </div>
         ))}
       </div>
@@ -112,9 +171,46 @@ function RhythmBar() {
           <span key={b} className="border-l border-border pl-1.5">{b}</span>
         ))}
       </div>
-      <p className="mt-3 text-xs text-muted-foreground">
-        One bar of 4/4: crotchet, two quavers, crotchet, crotchet.
-      </p>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs text-muted-foreground">One bar of 4/4: crotchet, two quavers, crotchet, crotchet.</p>
+        <PlayChip onClick={play}>Hear the rhythm</PlayChip>
+      </div>
+    </div>
+  );
+}
+
+function TriadDemo() {
+  const piano = usePiano();
+  const [lit, setLit] = useState<number[]>([]);
+  const TRIAD = ["C4", "E4", "G4"];
+  const WHITE_INDEX = [0, 2, 4];
+  const play = () => {
+    const steps: PhraseStep[] = [
+      ...TRIAD.map((n, i) => ({ notes: [n], at: i * 0.35, duration: 0.8 })),
+      { notes: TRIAD, at: 1.15, duration: 1.6 },
+    ];
+    piano.playPhrase(steps, (s) => {
+      const i = s ? steps.indexOf(s) : -1;
+      setLit(i < 0 ? [] : i < 3 ? [WHITE_INDEX[i]!] : WHITE_INDEX);
+    });
+  };
+  return (
+    <div className="mt-auto pt-10">
+      <button type="button" onClick={play} aria-label="Play the C major triad" className="block w-full">
+        <KeysGlyph highlight={lit.length ? lit : WHITE_INDEX} className="h-24 w-full transition-opacity hover:opacity-90" />
+      </button>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs text-muted-foreground">C major triad: C – E – G</p>
+        <div className="flex items-center gap-3">
+          <PlayChip onClick={play}>Play triad</PlayChip>
+          <SectionLink
+            hash={SECTION_IDS.experience}
+            className="link-draw inline-flex items-center gap-1.5 text-xs font-medium text-primary"
+          >
+            Full keyboard <ArrowRight className="size-3.5" aria-hidden />
+          </SectionLink>
+        </div>
+      </div>
     </div>
   );
 }
@@ -143,7 +239,7 @@ export function Features() {
             />
             <div className="flex flex-col justify-between p-6 md:p-12">
               <div>
-                <span className="text-xs tabular-nums text-gold-deep">01</span>
+                <span className="text-xs tabular-nums text-crimson-deep">01</span>
                 <h3 className="type-display-lg mt-4">Theory Academy</h3>
                 <p className="type-lede mt-4 max-w-md text-muted-foreground">
                   Structured lessons that make complex concepts easier to understand — each one moving from
@@ -183,18 +279,7 @@ export function Features() {
             body="Explore notes, intervals, scales and chords through sound."
             className="lg:col-span-4"
           >
-            <div className="mt-auto pt-10">
-              <KeysGlyph highlight={[0, 2, 4]} className="h-24 w-full" />
-              <div className="mt-3 flex items-center justify-between gap-4">
-                <p className="text-xs text-muted-foreground">C major triad: C – E – G</p>
-                <SectionLink
-                  hash={SECTION_IDS.experience}
-                  className="link-draw inline-flex items-center gap-1.5 text-sm font-medium text-primary"
-                >
-                  Play it <ArrowRight className="size-3.5" aria-hidden />
-                </SectionLink>
-              </div>
-            </div>
+            <TriadDemo />
           </Feature>
 
           <Feature

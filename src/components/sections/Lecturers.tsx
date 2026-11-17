@@ -63,7 +63,7 @@ export function Lecturers() {
             {LECTURER_FEATURES.map((f, i) => (
               <Reveal as="li" key={f.title} delay={i * 0.06} className="border-b border-border py-5">
                 <div className="flex items-baseline gap-5">
-                  <span className="text-xs tabular-nums text-gold-deep">0{i + 1}</span>
+                  <span className="text-xs tabular-nums text-crimson-deep">0{i + 1}</span>
                   <div>
                     <h3 className="font-display text-2xl">{f.title}</h3>
                     <AnimatePresence initial={false}>

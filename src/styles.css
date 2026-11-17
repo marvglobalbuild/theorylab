@@ -9,14 +9,14 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * THEORYLAB design system — editorial classical music meets precise learning tools.
- * Ivory/paper grounds, charcoal ink, burgundy for actions, antique gold as a quiet accent,
+ * THEORYLAB design system — a crisp concert-programme look for a precise learning tool.
+ * White grounds, navy ink, cobalt blue for actions, signal red as a sparing accent,
  * and dark "ink" sections for contrast. All colours are oklch.
  */
 
 @theme inline {
-  --font-display: "Cormorant Garamond", "Cormorant", Georgia, serif;
-  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Bodoni Moda", "Didot", Georgia, serif;
+  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
 
   --radius-sm: calc(var(--radius) - 2px);
   --radius-md: var(--radius);
@@ -47,8 +47,9 @@
   --color-ring-offset-background: var(--background);
 
   --color-paper: var(--paper);
-  --color-gold: var(--gold);
-  --color-gold-deep: var(--gold-deep);
+  --color-crimson: var(--crimson);
+  --color-crimson-deep: var(--crimson-deep);
+  --color-crimson-soft: var(--crimson-soft);
   --color-faint: var(--faint);
   --color-ink: var(--ink);
   --color-ink-deep: var(--ink-deep);
@@ -56,7 +57,7 @@
   --color-ink-foreground: var(--ink-foreground);
   --color-ink-muted: var(--ink-muted);
   --color-ink-border: var(--ink-border);
-  --color-burgundy-soft: var(--burgundy-soft);
+  --color-primary-soft: var(--primary-soft);
   --color-key-ivory: var(--key-ivory);
   --color-key-ivory-shade: var(--key-ivory-shade);
   --color-key-ebony: var(--key-ebony);
@@ -68,52 +69,56 @@
 :root {
   --radius: 0.25rem;
 
-  --background: oklch(0.968 0.01 87.5); /* ivory */
-  --foreground: oklch(0.243 0.004 106.7); /* charcoal */
-  --paper: oklch(0.997 0.005 95.1);
-  --card: var(--paper);
+  /* White concert-programme direction: navy ink, cobalt blue for actions, signal red accents */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.225 0.05 262.9); /* navy ink */
+  --paper: oklch(0.976 0.006 264.5); /* cool off-white panels */
+  --card: oklch(1 0 0);
   --card-foreground: var(--foreground);
-  --popover: var(--paper);
+  --popover: oklch(1 0 0);
   --popover-foreground: var(--foreground);
 
-  --primary: oklch(0.399 0.093 9.8); /* deep burgundy */
-  --primary-hover: oklch(0.352 0.083 9);
-  --primary-foreground: oklch(0.997 0.005 95.1);
+  --primary: oklch(0.387 0.15 266.4); /* cobalt blue */
+  --primary-hover: oklch(0.335 0.129 266.5);
+  --primary-foreground: oklch(1 0 0);
+  --primary-soft: oklch(0.783 0.109 270); /* blue on navy */
 
-  --secondary: oklch(0.941 0.013 86.8);
+  --secondary: oklch(0.957 0.01 261.8);
   --secondary-foreground: var(--foreground);
-  --muted: oklch(0.941 0.013 86.8);
-  --muted-foreground: oklch(0.49 0.01 84.6); /* AA on ivory */
-  --faint: oklch(0.607 0.011 87.5); /* soft grey — decorative only */
+  --muted: oklch(0.957 0.01 261.8);
+  --muted-foreground: oklch(0.498 0.035 262.4);
+  --faint: oklch(0.675 0.027 263.3); /* decorative only */
 
-  --accent: oklch(0.68 0.073 84.9); /* muted gold */
-  --accent-foreground: var(--foreground);
-  --gold: oklch(0.68 0.073 84.9);
-  --gold-deep: oklch(0.52 0.064 86);
+  --accent: oklch(0.53 0.207 22.3);
+  --accent-foreground: oklch(1 0 0);
+  --crimson: oklch(0.53 0.207 22.3); /* signal red */
+  --crimson-deep: oklch(0.457 0.177 21.7);
+  --crimson-soft: oklch(0.765 0.142 12.3); /* red on navy */
 
-  --destructive: oklch(0.52 0.16 27);
-  --destructive-foreground: var(--paper);
-  --border: oklch(0.877 0.013 86.8); /* warm grey */
-  --input: oklch(0.877 0.013 86.8);
-  --ring: oklch(0.399 0.093 9.8);
+  --destructive: oklch(0.53 0.207 22.3);
+  --destructive-foreground: oklch(1 0 0);
+  --border: oklch(0.914 0.016 262.8);
+  --input: oklch(0.914 0.016 262.8);
+  --ring: oklch(0.387 0.15 266.4);
 
-  /* Dark sections */
-  --ink: oklch(0.261 0.004 84.6);
-  --ink-deep: oklch(0.225 0.004 95);
-  --ink-raised: oklch(0.3 0.005 84);
-  --ink-foreground: oklch(0.968 0.01 87.5);
-  --ink-muted: oklch(0.74 0.014 86.8);
-  --ink-border: oklch(1 0 0 / 0.12);
-  --burgundy-soft: oklch(0.72 0.08 6.8);
+  /* Dark (navy) sections */
+  --ink: oklch(0.23 0.07 265.8);
+  --ink-deep: oklch(0.202 0.059 266.7);
+  --ink-raised: oklch(0.275 0.077 265.3);
+  --ink-foreground: oklch(0.976 0.006 264.5);
+  --ink-muted: oklch(0.775 0.039 265.8);
+  --ink-border: oklch(1 0 0 / 0.13);
 
   /* Piano */
-  --key-ivory: oklch(0.985 0.008 90);
-  --key-ivory-shade: oklch(0.89 0.014 85);
-  --key-ebony: oklch(0.16 0.003 90);
-  --key-ebony-top: oklch(0.3 0.004 90);
+  --key-ivory: oklch(0.995 0.002 264);
+  --key-ivory-shade: oklch(0.9 0.012 264);
+  --key-ebony: oklch(0.16 0.02 265);
+  --key-ebony-top: oklch(0.3 0.03 265);
+  --key-pressed: oklch(0.86 0.07 266);
+  --key-marked: oklch(0.9 0.06 20);
 
-  --shadow-soft: 0 1px 2px oklch(0.243 0.004 106.7 / 0.06), 0 12px 32px -16px oklch(0.243 0.004 106.7 / 0.18);
-  --shadow-lift: 0 30px 60px -30px oklch(0.243 0.004 106.7 / 0.35);
+  --shadow-soft: 0 1px 2px oklch(0.225 0.05 262.9 / 0.06), 0 12px 32px -16px oklch(0.225 0.05 262.9 / 0.18);
+  --shadow-lift: 0 30px 60px -30px oklch(0.225 0.05 262.9 / 0.4);
 }
 
 @layer base {
@@ -136,14 +141,14 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
-    font-feature-settings: "ss01", "kern";
+    font-feature-settings: "kern";
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     overflow-x: clip;
   }
 
   ::selection {
-    background: oklch(0.399 0.093 9.8 / 0.18);
+    background: oklch(0.387 0.15 266.4 / 0.16);
   }
 
   section[id] {
@@ -173,30 +178,35 @@
 /* Typography */
 @utility font-display {
   font-family: var(--font-display);
-  font-feature-settings: "liga", "dlig", "kern";
+  /* Low optical size keeps Bodoni's hairlines visible at large sizes */
+  font-variation-settings: "opsz" 18;
+  font-feature-settings: "liga", "kern";
 }
 
 @utility type-display-xl {
   font-family: var(--font-display);
+  font-variation-settings: "opsz" 18;
   font-weight: 400;
-  font-size: clamp(2.85rem, 7.2vw, 6.75rem);
-  line-height: 0.95;
-  letter-spacing: -0.02em;
+  font-size: clamp(2.5rem, 6.4vw, 6rem);
+  line-height: 1;
+  letter-spacing: -0.025em;
 }
 
 @utility type-display-lg {
   font-family: var(--font-display);
+  font-variation-settings: "opsz" 18;
   font-weight: 400;
-  font-size: clamp(2.25rem, 4.6vw, 4.25rem);
-  line-height: 1.02;
-  letter-spacing: -0.015em;
+  font-size: clamp(2rem, 4.1vw, 3.75rem);
+  line-height: 1.06;
+  letter-spacing: -0.02em;
 }
 
 @utility type-display-md {
   font-family: var(--font-display);
+  font-variation-settings: "opsz" 18;
   font-weight: 500;
-  font-size: clamp(1.6rem, 2.4vw, 2.25rem);
-  line-height: 1.1;
+  font-size: clamp(1.4rem, 2vw, 1.9rem);
+  line-height: 1.15;
   letter-spacing: -0.01em;
 }
 
@@ -217,31 +227,31 @@
   max-width: 36rem;
 }
 
-/* Hairline rule with gold centre tick, used as a section separator */
-@utility rule-gold {
+/* Hairline rule with crimson centre tick, used as a section separator */
+@utility rule-crimson {
   height: 1px;
-  background: linear-gradient(90deg, transparent, var(--color-gold) 20%, var(--color-gold) 80%, transparent);
+  background: linear-gradient(90deg, transparent, var(--color-crimson) 20%, var(--color-crimson) 80%, transparent);
   opacity: 0.6;
 }
 
 /* Subtle paper grain for light sections — no animation */
 @utility paper-grain {
-  background-image: radial-gradient(oklch(0.243 0.004 106.7 / 0.035) 1px, transparent 1px);
+  background-image: radial-gradient(oklch(0.225 0.05 262.9 / 0.03) 1px, transparent 1px);
   background-size: 3px 3px;
 }
 
 /* Piano keys */
 @utility key-white {
   background: linear-gradient(180deg, var(--color-key-ivory-shade) 0%, var(--color-key-ivory) 9%, var(--color-key-ivory) 86%, var(--color-key-ivory-shade) 100%);
-  box-shadow: inset 0 -6px 0 oklch(0.243 0.004 106.7 / 0.08), inset -1px 0 0 oklch(0.243 0.004 106.7 / 0.18);
+  box-shadow: inset 0 -6px 0 oklch(0.225 0.05 262.9 / 0.08), inset -1px 0 0 oklch(0.225 0.05 262.9 / 0.16);
   transition: transform 120ms var(--ease-editorial), background 160ms var(--ease-editorial), box-shadow 160ms var(--ease-editorial);
   &[data-active="true"] {
-    background: linear-gradient(180deg, var(--color-key-ivory-shade) 0%, oklch(0.93 0.03 20) 30%, oklch(0.9 0.045 15) 100%);
-    box-shadow: inset 0 -2px 0 oklch(0.243 0.004 106.7 / 0.12), inset -1px 0 0 oklch(0.243 0.004 106.7 / 0.18);
+    background: linear-gradient(180deg, var(--color-key-ivory-shade) 0%, var(--key-pressed) 35%, var(--key-pressed) 100%);
+    box-shadow: inset 0 -2px 0 oklch(0.225 0.05 262.9 / 0.12), inset -1px 0 0 oklch(0.225 0.05 262.9 / 0.16);
     transform: translateY(2px);
   }
   &[data-highlight="true"] {
-    background: linear-gradient(180deg, var(--color-key-ivory-shade) 0%, oklch(0.93 0.04 85) 30%, oklch(0.88 0.06 85) 100%);
+    background: linear-gradient(180deg, var(--color-key-ivory-shade) 0%, var(--key-marked) 35%, var(--key-marked) 100%);
   }
 }
 
@@ -255,7 +265,7 @@
     transform: translateY(2px);
   }
   &[data-highlight="true"] {
-    background: linear-gradient(180deg, var(--color-key-ebony) 0%, var(--color-gold-deep) 100%);
+    background: linear-gradient(180deg, var(--color-key-ebony) 0%, var(--color-crimson-deep) 100%);
   }
 }
 
@@ -303,5 +313,23 @@
   .staff-note-reveal {
     opacity: 1;
     animation: none;
+  }
+}
+
+/* Equaliser bars in the music player */
+@keyframes music-bar {
+  0%, 100% { height: 4px; }
+  50% { height: 14px; }
+}
+
+.music-bar {
+  height: 4px;
+  animation: music-bar 900ms ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .music-bar {
+    animation: none;
+    height: 10px;
   }
 }

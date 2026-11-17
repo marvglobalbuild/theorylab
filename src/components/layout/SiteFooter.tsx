@@ -18,7 +18,7 @@ export function SiteFooter() {
 
         <nav aria-label="Footer" className="grid grid-cols-2 gap-10 sm:grid-cols-3 md:col-span-7">
           <div>
-            <h3 className="eyebrow mb-4 text-gold">Explore</h3>
+            <h3 className="eyebrow mb-4 text-crimson-soft">Explore</h3>
             <ul className="space-y-2.5">
               <li><SectionLink hash={SECTION_IDS.learningPaths} className={linkClass}>Learning paths</SectionLink></li>
               <li><SectionLink hash={SECTION_IDS.experience} className={linkClass}>Music tools</SectionLink></li>
@@ -26,14 +26,14 @@ export function SiteFooter() {
             </ul>
           </div>
           <div>
-            <h3 className="eyebrow mb-4 text-gold">THEORYLAB</h3>
+            <h3 className="eyebrow mb-4 text-crimson-soft">THEORYLAB</h3>
             <ul className="space-y-2.5">
               <li><SectionLink hash={SECTION_IDS.about} className={linkClass}>About</SectionLink></li>
               <li><Link to="/contact" className={linkClass}>Contact</Link></li>
             </ul>
           </div>
           <div>
-            <h3 className="eyebrow mb-4 text-gold">Legal</h3>
+            <h3 className="eyebrow mb-4 text-crimson-soft">Legal</h3>
             <ul className="space-y-2.5">
               <li><Link to="/privacy" className={linkClass}>Privacy policy</Link></li>
               <li><Link to="/terms" className={linkClass}>Terms of use</Link></li>

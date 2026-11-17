@@ -58,7 +58,7 @@ export function HowItWorks() {
           <ol className="mt-10 grid grid-cols-4 gap-8">
             {STEPS.map((step, i) => (
               <Reveal as="li" key={step.number} delay={0.3 + i * 0.1} className="pr-4">
-                  <span className="font-display text-5xl text-gold-deep">{step.number}</span>
+                  <span className="font-display text-5xl text-crimson-deep">{step.number}</span>
                   <h3 className="type-display-md mt-4">{step.title}</h3>
                   <p className="mt-3 text-[0.95rem] leading-relaxed text-muted-foreground">{step.description}</p>
               </Reveal>
@@ -71,7 +71,7 @@ export function HowItWorks() {
           {STEPS.map((step, i) => (
             <Reveal as="li" key={step.number} delay={i * 0.06} className="relative pb-10 pl-8 last:pb-0">
                 <span aria-hidden className="absolute top-3 -left-[7px] h-[10px] w-[14px] -rotate-[20deg] rounded-[50%] bg-primary" />
-                <span className="font-display text-4xl text-gold-deep">{step.number}</span>
+                <span className="font-display text-4xl text-crimson-deep">{step.number}</span>
                 <h3 className="type-display-md mt-2">{step.title}</h3>
                 <p className="mt-2 text-[0.95rem] leading-relaxed text-muted-foreground">{step.description}</p>
             </Reveal>

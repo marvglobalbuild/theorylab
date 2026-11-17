@@ -13,6 +13,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { MusicPlayer } from "../components/music/MusicPlayer";
 
 function NotFoundComponent() {
   return (
@@ -88,7 +89,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         content:
           "An interactive learning environment that makes classical music theory easier to understand, practise and master.",
       },
-      { name: "theme-color", content: "#F7F4ED" },
+      { name: "theme-color", content: "#FFFFFF" },
       { property: "og:site_name", content: "THEORYLAB" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -103,7 +104,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..700;1,6..96,400..700&family=Manrope:wght@400;500;600;700&display=swap",
       },
     ],
   }),
@@ -135,6 +136,7 @@ function RootComponent() {
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <MotionConfig reducedMotion="user">
         <Outlet />
+        <MusicPlayer />
       </MotionConfig>
     </QueryClientProvider>
   );

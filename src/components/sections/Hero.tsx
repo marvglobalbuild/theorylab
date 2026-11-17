@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { motion, useReducedMotion, useScroll, useTransform } from "motion/react";
-import { ArrowDown, ArrowRight, Play } from "lucide-react";
+import { ArrowDown, ArrowRight, Music2, Pause, Play } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import heroImage from "@/assets/hero-piano.jpg";
@@ -8,7 +8,9 @@ import { Button } from "@/components/ui/button";
 import { EASE, RevealImage, WordReveal } from "@/components/motion/Reveal";
 import { SectionLink } from "@/components/layout/SectionLink";
 import { Staff } from "@/components/music/Staff";
-import { usePiano } from "@/lib/music/usePiano";
+import { usePiano, type PhraseStep } from "@/lib/music/usePiano";
+import { toggleBackgroundMusic } from "@/lib/music/backgroundMusic";
+import { useMusic } from "@/lib/music/useMusic";
 import { SECTION_IDS } from "@/content/site";
 
 const ARPEGGIO = ["C4", "E4", "G4", "C5"];
@@ -29,12 +31,21 @@ export function Hero() {
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
   const cardY = useTransform(scrollYProgress, [0, 1], reduce || !isWide ? [0, 0] : [0, -70]);
   const piano = usePiano();
+  const music = useMusic();
+  const [lit, setLit] = useState<number | null>(null);
 
-  const hearIt = () =>
-    piano.playPhrase([
+  const hearIt = () => {
+    const steps: PhraseStep[] = [
       ...ARPEGGIO.map((n, i) => ({ notes: [n], at: i * 0.42, duration: 0.9 })),
       { notes: ARPEGGIO, at: ARPEGGIO.length * 0.42 + 0.1, duration: 1.8 },
-    ]);
+    ];
+    piano.playPhrase(steps, (s) => setLit(s ? steps.indexOf(s) : null));
+  };
+
+  const playOne = (index: number) => {
+    const notes = index < ARPEGGIO.length ? [ARPEGGIO[index]!] : ARPEGGIO;
+    piano.playPhrase([{ notes, at: 0, duration: 1.2 }], (s) => setLit(s ? index : null));
+  };
 
   return (
     <section ref={ref} id={SECTION_IDS.top} className="relative overflow-hidden pt-28 md:pt-32 lg:pt-36">
@@ -46,7 +57,7 @@ export function Hero() {
             animate={{ opacity: 1 }}
             transition={{ duration: 1, ease: EASE, delay: 0.1 }}
           >
-            <span aria-hidden className="h-px w-10 bg-gold" />
+            <span aria-hidden className="h-px w-10 bg-crimson" />
             Classical music theory, interactive
           </motion.p>
 
@@ -80,6 +91,17 @@ export function Hero() {
                 </SectionLink>
               </Button>
             </div>
+            <button
+              type="button"
+              onClick={toggleBackgroundMusic}
+              aria-pressed={music.playing}
+              className="group mt-7 inline-flex items-center gap-3 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <span className="inline-flex size-8 items-center justify-center rounded-full border border-primary/30 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                {music.playing ? <Pause className="size-3.5" /> : <Music2 className="size-3.5" />}
+              </span>
+              {music.playing ? "Pause Bach" : "Listen to Bach’s Prelude in C while you explore"}
+            </button>
           </motion.div>
         </div>
 
@@ -107,12 +129,14 @@ export function Hero() {
               chords={[...ARPEGGIO.map((k) => ({ keys: [k], duration: "q" as const })), { keys: ARPEGGIO, duration: "w" }]}
               height={130}
               revealNotes
+              selectedIndex={lit}
+              onSelect={playOne}
               label="C major arpeggio — C, E, G, C — followed by the full chord"
             />
             <figcaption className="mt-2 flex items-center justify-between gap-4 border-t border-border pt-3">
               <span className="text-xs leading-snug text-muted-foreground">
                 <span className="font-display text-base italic text-foreground">C major</span>, broken then
-                together
+                together — tap a note
               </span>
               <button
                 type="button"
@@ -137,7 +161,7 @@ export function Hero() {
               transition={{ duration: 0.9, ease: EASE, delay: 1.1 + i * 0.08 }}
               className="flex items-baseline gap-3 border-border py-5 md:border-l md:pl-6 md:first:border-l-0 md:first:pl-0 [&:nth-child(even)]:border-l [&:nth-child(even)]:pl-5 md:[&:nth-child(even)]:pl-6"
             >
-              <span className="text-xs tabular-nums text-gold-deep">0{i + 1}</span>
+              <span className="text-xs tabular-nums text-crimson-deep">0{i + 1}</span>
               <span className="font-display text-xl sm:text-2xl md:text-[1.7rem]">
                 {word} <span className="italic text-muted-foreground">music.</span>
               </span>

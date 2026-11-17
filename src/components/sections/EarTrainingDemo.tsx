@@ -55,9 +55,9 @@ export function EarTrainingDemo() {
               className={cn(
                 "rounded-[2px] border px-3 py-3 text-left transition-colors disabled:cursor-default",
                 isTarget
-                  ? "border-gold bg-gold/15 text-ink-foreground"
+                  ? "border-crimson-soft bg-crimson-soft/15 text-ink-foreground"
                   : chosen
-                    ? "border-burgundy-soft text-ink-foreground"
+                    ? "border-primary-soft text-ink-foreground"
                     : "border-ink-border text-ink-muted enabled:hover:border-ink-muted enabled:hover:text-ink-foreground",
               )}
             >
@@ -72,9 +72,9 @@ export function EarTrainingDemo() {
         {answer !== null && target && (
           <>
             {correct ? (
-              <Check className="size-4 text-gold" aria-hidden />
+              <Check className="size-4 text-crimson-soft" aria-hidden />
             ) : (
-              <X className="size-4 text-burgundy-soft" aria-hidden />
+              <X className="size-4 text-primary-soft" aria-hidden />
             )}
             <span className="text-ink-foreground/90">
               {correct ? "Correct — " : "Not quite. It was a "}

@@ -21,7 +21,7 @@ export function SectionHeading({
     <div className={className}>
       <Reveal>
         <p className={cn("eyebrow flex items-center gap-3", inverse ? "text-ink-muted" : "text-muted-foreground")}>
-          <span className={inverse ? "text-gold" : "text-gold-deep"}>{number}</span>
+          <span className={inverse ? "text-crimson-soft" : "text-crimson-deep"}>{number}</span>
           <span aria-hidden className={cn("h-px w-8", inverse ? "bg-ink-border" : "bg-border")} />
           {label}
         </p>
@@ -29,7 +29,7 @@ export function SectionHeading({
       <WordReveal
         text={title}
         emphasis={emphasis}
-        emphasisClassName={inverse ? "italic text-burgundy-soft" : "italic text-primary"}
+        emphasisClassName={inverse ? "italic text-primary-soft" : "italic text-primary"}
         className={cn("type-display-lg mt-6", inverse ? "text-ink-foreground" : "text-foreground")}
       />
     </div>

@@ -102,7 +102,7 @@ function StartPage() {
                           onChange={() => setLevel(l.id)}
                           className="sr-only"
                         />
-                        <span className={cn("font-display text-3xl leading-none", level === l.id ? "text-primary" : "text-gold-deep")}>
+                        <span className={cn("font-display text-3xl leading-none", level === l.id ? "text-primary" : "text-crimson-deep")}>
                           {l.numeral}
                         </span>
                         <span>
@@ -163,7 +163,7 @@ function StartPage() {
 
               {step === 2 && chosenLevel && (
                 <div>
-                  <p className="eyebrow text-gold-deep">Level {chosenLevel.numeral}</p>
+                  <p className="eyebrow text-crimson-deep">Level {chosenLevel.numeral}</p>
                   <h2 className="type-display-lg mt-3">{chosenLevel.name}</h2>
                   <p className="mt-4 max-w-lg text-muted-foreground">
                     You would begin with these lessons, in this order:
@@ -171,7 +171,7 @@ function StartPage() {
                   <ol className="mt-8 border-t border-foreground/80">
                     {chosenLevel.topics.map((t, i) => (
                       <li key={t.title} className="flex gap-5 border-b border-border py-5">
-                        <span className="font-display text-2xl text-gold-deep">{i + 1}</span>
+                        <span className="font-display text-2xl text-crimson-deep">{i + 1}</span>
                         <span>
                           <span className="block font-medium">{t.title}</span>
                           <span className="mt-1 block text-sm text-muted-foreground">{t.detail}</span>
@@ -188,7 +188,7 @@ function StartPage() {
                       .
                     </p>
                   )}
-                  <div className="mt-10 border border-gold/50 bg-paper p-6">
+                  <div className="mt-10 border border-primary/25 bg-paper p-6">
                     <p className="font-display text-xl">Full lessons open with the launch of THEORYLAB accounts.</p>
                     <p className="mt-2 text-sm text-muted-foreground">
                       Until then, the keyboard, notation and interval demonstrations are free to use on the home

@@ -33,7 +33,7 @@ function ClosingStaff() {
           <rect x="774" y="8" width="6" height="48" fill="currentColor" opacity="0.6" />
         </motion.g>
       </svg>
-      <span className="absolute -bottom-7 right-0 font-display text-lg italic text-gold">Fine</span>
+      <span className="absolute -bottom-7 right-0 font-display text-lg italic text-crimson-soft">Fine</span>
     </div>
   );
 }
@@ -48,7 +48,7 @@ export function FinalCta() {
         <WordReveal
           text="Your understanding of music starts here."
           emphasis={["music"]}
-          emphasisClassName="italic text-burgundy-soft"
+          emphasisClassName="italic text-primary-soft"
           className="type-display-xl mx-auto mt-8 max-w-[14ch]"
         />
         <Reveal delay={0.25}>

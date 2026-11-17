@@ -15,7 +15,7 @@ export function AudioStatusLabel({ status, className }: { status: AudioStatus; c
         aria-hidden
         className={cn(
           "size-1.5 rounded-full",
-          status === "ready" ? "bg-gold" : status === "loading" ? "animate-pulse bg-ink-muted" : "bg-ink-border",
+          status === "ready" ? "bg-crimson-soft" : status === "loading" ? "animate-pulse bg-ink-muted" : "bg-ink-border",
         )}
       />
       {LABELS[status]}

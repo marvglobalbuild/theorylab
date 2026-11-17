@@ -64,3 +64,19 @@ describe("staff reading", () => {
     expect(TREBLE_READING.map((n) => n.note)).toEqual(["C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5"]);
   });
 });
+
+import { BACH_PRELUDE_C, buildPreludeEvents } from "@/lib/music/repertoire";
+
+describe("Bach Prelude in C", () => {
+  it("opens on C–E–G–C–E and closes the excerpt on C major", () => {
+    expect(BACH_PRELUDE_C[0]?.notes).toEqual(["C4", "E4", "G4", "C5", "E5"]);
+    expect(BACH_PRELUDE_C.at(-1)?.chord).toBe("C");
+  });
+
+  it("plays sixteen semiquavers per bar in Bach's arpeggio pattern", () => {
+    const { events, length } = buildPreludeEvents(BACH_PRELUDE_C, 0.2);
+    expect(events).toHaveLength(BACH_PRELUDE_C.length * 16);
+    expect(length).toBeCloseTo(BACH_PRELUDE_C.length * 16 * 0.2, 6);
+    expect(events.slice(0, 8).map((e) => e.note)).toEqual(["C4", "E4", "G4", "C5", "E5", "G4", "C5", "E5"]);
+  });
+});

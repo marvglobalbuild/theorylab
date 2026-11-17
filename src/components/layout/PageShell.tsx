@@ -19,8 +19,8 @@ export function PageShell({ children }: { children: ReactNode }) {
 /** Small "Preview" tag used wherever a feature is not yet live. */
 export function PreviewTag({ children = "Preview" }: { children?: ReactNode }) {
   return (
-    <span className="eyebrow inline-flex items-center gap-2 rounded-[2px] border border-gold/60 px-2.5 py-1 text-gold-deep">
-      <span aria-hidden className="size-1 rounded-full bg-gold" />
+    <span className="eyebrow inline-flex items-center gap-2 rounded-[2px] border border-primary/30 px-2.5 py-1 text-primary">
+      <span aria-hidden className="size-1 rounded-full bg-crimson" />
       {children}
     </span>
   );
