@@ -28,3 +28,11 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+## Project rules
+
+- Frontend only: no backend, database or auth is connected. UI talks to `src/services` contracts; preview implementations return "unavailable" and never fake success — swap implementations in `src/services/index.ts` when a backend arrives.
+- Music logic stays pure in `src/lib/music/theory.ts` (unit-tested in `src/test/music-theory.test.ts`); audio and notation live in separate browser-only modules.
+- Tone.js and VexFlow are dynamically imported in the browser only (Tone on the first user gesture, to satisfy autoplay rules and keep SSR clean).
+- Custom type-scale utilities are named `type-*` (not `text-*`) so `cn()`/tailwind-merge doesn't strip them when combined with text colour classes.
+- Landing sections are reached via hash links (`SectionLink`) on `/`, as the brief requires one scrolling landing page; secondary pages are separate routes.
