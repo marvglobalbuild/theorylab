@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
 import { AnimatePresence, motion } from "motion/react";
-import { Eraser, Play, Volume2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eraser, Play, Volume2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { usePiano } from "@/lib/music/usePiano";
+import { usePiano, type PhraseStep } from "@/lib/music/usePiano";
 import { useMusic } from "@/lib/music/useMusic";
 import {
   INTERVALS,
@@ -15,6 +15,7 @@ import {
   enharmonic,
   isSameKey,
   noteFrequency,
+  semitonesBetween,
 } from "@/lib/music/theory";
 import { Piano } from "./Piano";
 import { Staff, type StaffChord } from "./Staff";
@@ -38,6 +39,7 @@ export function Instrument() {
   const [pressed, setPressed] = useState<Set<string>>(new Set());
   const [sounding, setSounding] = useState<string[]>([]);
   const [played, setPlayed] = useState<string[]>([]);
+  const [playedLitIndex, setPlayedLitIndex] = useState<number | null>(null);
   const [readIndex, setReadIndex] = useState<number | null>(0);
   const [readMiss, setReadMiss] = useState<string | null>(null);
   const [intervalId, setIntervalId] = useState("P5");
@@ -51,7 +53,11 @@ export function Instrument() {
       piano.noteOn(note);
       setPressed((prev) => new Set(prev).add(note));
       if (mode === "play") {
-        setPlayed((prev) => [...prev, note].slice(-MAX_PLAYED));
+        setPlayed((prev) => {
+          const next = [...prev, note].slice(-MAX_PLAYED);
+          setPlayedLitIndex(next.length - 1);
+          return next;
+        });
       } else if (mode === "read") {
         const idx = TREBLE_READING.findIndex((n) => isSameKey(n.note, note));
         setReadIndex(idx >= 0 ? idx : null);
@@ -113,8 +119,52 @@ export function Instrument() {
     piano.playPhrase([{ notes: [note], at: 0, duration: 0.9 }], (s) => setSounding(s?.notes ?? []));
   };
 
-  const playInterval = (kind: "melodic" | "harmonic" | "both") => {
-    const { lower, upper } = interval;
+  const playScale = () => {
+    setReadMiss(null);
+    const steps: PhraseStep[] = TREBLE_READING.map((item, i) => ({
+      notes: [item.note],
+      at: i * 0.42,
+      duration: i === TREBLE_READING.length - 1 ? 1.1 : 0.45,
+    }));
+    piano.playPhrase(steps, (s) => {
+      if (!s) {
+        setSounding([]);
+        return;
+      }
+      const idx = steps.indexOf(s);
+      if (idx >= 0) setReadIndex(idx);
+      setSounding(s.notes);
+    });
+  };
+
+  const playPlayedPhrase = () => {
+    if (!played.length) return;
+    const steps: PhraseStep[] = played.map((n, i) => ({
+      notes: [n],
+      at: i * 0.42,
+      duration: i === played.length - 1 ? 1.1 : 0.45,
+    }));
+    piano.playPhrase(steps, (s) => {
+      if (!s) {
+        setSounding([]);
+        setPlayedLitIndex(played.length - 1);
+        return;
+      }
+      const idx = steps.indexOf(s);
+      if (idx >= 0) setPlayedLitIndex(idx);
+      setSounding(s.notes);
+    });
+  };
+
+  const selectPlayedNote = (index: number) => {
+    const note = played[index];
+    if (!note) return;
+    setPlayedLitIndex(index);
+    piano.playPhrase([{ notes: [note], at: 0, duration: 0.9 }], (s) => setSounding(s?.notes ?? []));
+  };
+
+  const playIntervalFor = (item: (typeof INTERVALS)[number], kind: "melodic" | "harmonic" | "both") => {
+    const { lower, upper } = item;
     const melodic = [
       { notes: [lower], at: 0, duration: 0.7 },
       { notes: [upper], at: 0.75, duration: 0.7 },
@@ -123,6 +173,13 @@ export function Instrument() {
     const steps =
       kind === "melodic" ? melodic : kind === "harmonic" ? harmonic(0) : [...melodic, ...harmonic(1.6)];
     piano.playPhrase(steps, (s) => setSounding(s?.notes ?? []));
+  };
+
+  const playInterval = (kind: "melodic" | "harmonic" | "both") => playIntervalFor(interval, kind);
+
+  const chooseInterval = (item: (typeof INTERVALS)[number]) => {
+    setIntervalId(item.id);
+    playIntervalFor(item, "melodic");
   };
 
   const activeNotes = useMemo(
@@ -134,7 +191,7 @@ export function Instrument() {
     const reading = readIndex !== null ? TREBLE_READING[readIndex] : undefined;
     if (mode === "read" && reading) return new Set([reading.note]);
     if (mode === "intervals") {
-      const toSharp = (n: string) => enharmonic(n) && n.includes("b") ? enharmonic(n)! : n;
+      const toSharp = (n: string) => (enharmonic(n) && n.includes("b") ? enharmonic(n)! : n);
       return new Set([toSharp(interval.lower), toSharp(interval.upper)]);
     }
     return new Set<string>();
@@ -150,7 +207,13 @@ export function Instrument() {
     ];
   }, [mode, played, interval]);
 
-  const lastPlayed = played.at(-1);
+  const activePlayIndex =
+    played.length === 0 ? null : playedLitIndex !== null && playedLitIndex < played.length ? playedLitIndex : played.length - 1;
+  const activePlayedNote = activePlayIndex !== null ? played[activePlayIndex] : undefined;
+  const previousPlayedNote =
+    activePlayIndex !== null && activePlayIndex > 0 ? played[activePlayIndex - 1] : undefined;
+
+  const currentReadIndex = readIndex ?? 0;
 
   return (
     <div
@@ -159,13 +222,13 @@ export function Instrument() {
     >
       <Tabs.Root value={mode} onValueChange={(v) => setMode(v as Mode)}>
         {/* Top bar */}
-        <div className="flex flex-col gap-4 border-b border-ink-border px-4 py-4 sm:flex-row sm:items-center sm:justify-between md:px-6">
-          <Tabs.List aria-label="Demonstration" className="flex gap-1 self-start rounded-sm bg-ink-deep p-1">
+        <div className="flex flex-col gap-3 border-b border-ink-border px-4 py-4 sm:flex-row sm:items-center sm:justify-between md:px-6">
+          <Tabs.List aria-label="Demonstration" className="flex w-full gap-1 rounded-sm bg-ink-deep p-1 sm:w-auto">
             {MODES.map((m) => (
               <Tabs.Trigger
                 key={m.id}
                 value={m.id}
-                className="relative rounded-[2px] px-3.5 py-2 text-sm text-ink-muted transition-colors hover:text-ink-foreground data-[state=active]:text-ink-foreground md:px-4"
+                className="relative flex-1 rounded-[2px] px-3 py-2 text-center text-sm text-ink-muted transition-colors hover:text-ink-foreground data-[state=active]:text-ink-foreground sm:flex-initial sm:px-4"
               >
                 {mode === m.id && (
                   <motion.span
@@ -178,7 +241,7 @@ export function Instrument() {
               </Tabs.Trigger>
             ))}
           </Tabs.List>
-          <div className="flex items-center justify-between gap-4 sm:justify-end">
+          <div className="flex flex-wrap items-center justify-between gap-4 sm:justify-end">
             <AudioStatusLabel status={piano.status} />
             <label className="flex cursor-pointer items-center gap-2 text-xs text-ink-muted">
               <input
@@ -195,29 +258,45 @@ export function Instrument() {
         {/* Score + readout */}
         <div className="grid lg:grid-cols-12">
           <div className="paper-grain border-b border-ink-border bg-paper px-3 py-5 text-foreground md:px-6 lg:col-span-7 lg:border-r lg:border-b-0">
-            <div className="mb-1 flex items-baseline justify-between px-1">
+            <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2 px-1">
               <span className="eyebrow text-muted-foreground">Treble staff</span>
               {mode === "play" && played.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setPlayed([])}
-                  className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-primary"
-                >
-                  <Eraser className="size-3.5" aria-hidden /> Clear
-                </button>
+                <div className="flex items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={playPlayedPhrase}
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-primary transition-colors hover:text-primary-hover"
+                  >
+                    <Play className="size-3.5" aria-hidden /> Play back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPlayed([]);
+                      setPlayedLitIndex(null);
+                    }}
+                    className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-primary"
+                  >
+                    <Eraser className="size-3.5" aria-hidden /> Clear
+                  </button>
+                </div>
               )}
             </div>
             <Staff
               chords={chords}
               height={160}
               label={staffLabel(mode, played, interval.name)}
-              selectedIndex={mode === "read" ? readIndex : null}
-              {...(mode === "read" ? { onSelect: selectReadNote } : {})}
+              selectedIndex={mode === "read" ? readIndex : mode === "play" ? activePlayIndex : null}
+              {...(mode === "read"
+                ? { onSelect: selectReadNote }
+                : mode === "play" && played.length > 0
+                  ? { onSelect: selectPlayedNote }
+                  : {})}
               emptyMessage="Play a key to write it here"
             />
           </div>
 
-          <div className="flex min-h-[15rem] flex-col justify-between gap-6 px-5 py-6 md:px-8 lg:col-span-5">
+          <div className="flex min-h-[12rem] flex-col justify-between gap-6 px-5 py-6 md:min-h-[15rem] md:px-8 lg:col-span-5">
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={mode}
@@ -228,10 +307,10 @@ export function Instrument() {
                 aria-live="polite"
               >
                 <p className="eyebrow mb-4 text-crimson-soft">{MODES.find((m) => m.id === mode)?.hint}</p>
-                {mode === "play" && <PlayReadout note={lastPlayed} />}
-                {mode === "read" && (
-                  <ReadReadout index={readIndex} miss={readMiss} />
+                {mode === "play" && (
+                  <PlayReadout note={activePlayedNote} previousNote={previousPlayedNote} />
                 )}
+                {mode === "read" && <ReadReadout index={readIndex} miss={readMiss} />}
                 {mode === "intervals" && (
                   <div>
                     <p className="type-display-md text-ink-foreground">{interval.name}</p>
@@ -248,6 +327,43 @@ export function Instrument() {
               </motion.div>
             </AnimatePresence>
 
+            {mode === "play" && activePlayedNote && (
+              <div className="flex flex-wrap gap-2">
+                <PlayButton onClick={() => selectPlayedNote(activePlayIndex!)}>
+                  Hear {displayNote(activePlayedNote)}
+                </PlayButton>
+                {played.length > 1 && (
+                  <PlayButton onClick={playPlayedPhrase} primary>
+                    Play phrase ({played.length})
+                  </PlayButton>
+                )}
+              </div>
+            )}
+
+            {mode === "read" && (
+              <div className="flex flex-wrap items-center gap-2">
+                <PlayButton onClick={playScale} primary>
+                  Play scale
+                </PlayButton>
+                <button
+                  type="button"
+                  onClick={() => selectReadNote((currentReadIndex - 1 + TREBLE_READING.length) % TREBLE_READING.length)}
+                  aria-label="Previous note"
+                  className="inline-flex h-10 items-center gap-1 rounded-[2px] border border-ink-border px-3 text-sm text-ink-foreground transition-colors hover:border-ink-muted"
+                >
+                  <ChevronLeft className="size-4" aria-hidden /> Prev
+                </button>
+                <button
+                  type="button"
+                  onClick={() => selectReadNote((currentReadIndex + 1) % TREBLE_READING.length)}
+                  aria-label="Next note"
+                  className="inline-flex h-10 items-center gap-1 rounded-[2px] border border-ink-border px-3 text-sm text-ink-foreground transition-colors hover:border-ink-muted"
+                >
+                  Next <ChevronRight className="size-4" aria-hidden />
+                </button>
+              </div>
+            )}
+
             {mode === "intervals" && (
               <div className="flex flex-wrap gap-2">
                 <PlayButton onClick={() => playInterval("both")} primary>
@@ -260,37 +376,47 @@ export function Instrument() {
           </div>
         </div>
 
-        {mode === "intervals" && (
-          <div className="border-t border-ink-border px-4 py-4 md:px-6">
-            <div
-              role="radiogroup"
-              aria-label="Interval above middle C"
-              className="grid grid-cols-4 gap-1.5 sm:grid-cols-6 lg:grid-cols-12"
+        <AnimatePresence initial={false}>
+          {mode === "intervals" && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.35, ease: EASE }}
+              className="overflow-hidden border-t border-ink-border"
             >
-              {INTERVALS.map((i) => (
-                <button
-                  key={i.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={i.id === intervalId}
-                  aria-label={i.name}
-                  onClick={() => setIntervalId(i.id)}
-                  className={cn(
-                    "rounded-[2px] border px-2 py-2.5 text-center transition-colors",
-                    i.id === intervalId
-                      ? "border-primary-soft bg-primary text-primary-foreground"
-                      : "border-ink-border text-ink-muted hover:border-ink-muted hover:text-ink-foreground",
-                  )}
+              <div className="px-4 py-4 md:px-6">
+                <div
+                  role="radiogroup"
+                  aria-label="Interval above middle C"
+                  className="grid grid-cols-4 gap-1.5 sm:grid-cols-6 lg:grid-cols-12"
                 >
-                  <span className="block font-display text-lg leading-none">{i.short}</span>
-                  <span className="mt-1 block text-[0.62rem] tracking-wide opacity-80">
-                    {i.semitones} st
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+                  {INTERVALS.map((i) => (
+                    <button
+                      key={i.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={i.id === intervalId}
+                      aria-label={i.name}
+                      onClick={() => chooseInterval(i)}
+                      className={cn(
+                        "rounded-[2px] border px-2 py-2.5 text-center transition-colors",
+                        i.id === intervalId
+                          ? "border-primary-soft bg-primary text-primary-foreground"
+                          : "border-ink-border text-ink-muted hover:border-ink-muted hover:text-ink-foreground",
+                      )}
+                    >
+                      <span className="block font-display text-lg leading-none">{i.short}</span>
+                      <span className="mt-1 block text-[0.62rem] tracking-wide opacity-80">
+                        {i.semitones} st
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Keyboard */}
         <div className="border-t border-ink-border bg-ink-deep px-2 pt-3 pb-4 md:px-5 md:pb-6">
@@ -298,7 +424,7 @@ export function Instrument() {
             <span className="h-px flex-1 bg-gradient-to-r from-transparent via-crimson/50 to-transparent" />
           </div>
           <Piano
-            className="h-44 md:h-52"
+            className="h-40 sm:h-44 md:h-52"
             activeNotes={activeNotes}
             highlightNotes={highlightNotes}
             showLabels={showLabels}
@@ -324,7 +450,7 @@ function staffLabel(mode: Mode, played: string[], intervalName: string) {
   return `Treble staff showing a ${intervalName} above middle C, melodically then harmonically`;
 }
 
-function PlayReadout({ note }: { note: string | undefined }) {
+function PlayReadout({ note, previousNote }: { note: string | undefined; previousNote: string | undefined }) {
   if (!note)
     return (
       <p className="type-display-md text-ink-foreground/80">
@@ -332,10 +458,20 @@ function PlayReadout({ note }: { note: string | undefined }) {
       </p>
     );
   const alt = enharmonic(note);
+  const stepSemitones = previousNote ? Math.abs(semitonesBetween(previousNote, note)) : null;
+  const stepLabel =
+    stepSemitones === null
+      ? null
+      : stepSemitones === 0
+        ? "Unison"
+        : `${stepSemitones} semitone${stepSemitones === 1 ? "" : "s"}`;
+
   return (
     <div>
-      <p className="font-display text-6xl leading-none text-ink-foreground md:text-7xl">{displayNote(note)}</p>
-      <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+      <p className="font-display text-5xl leading-none text-ink-foreground sm:text-6xl md:text-7xl">
+        {displayNote(note)}
+      </p>
+      <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3">
         <div>
           <dt className="text-ink-muted">Also written</dt>
           <dd className="mt-0.5 text-ink-foreground">{alt ? displayNote(alt) : "—"}</dd>
@@ -344,6 +480,12 @@ function PlayReadout({ note }: { note: string | undefined }) {
           <dt className="text-ink-muted">Frequency</dt>
           <dd className="mt-0.5 text-ink-foreground tabular-nums">{noteFrequency(note).toFixed(2)} Hz</dd>
         </div>
+        {previousNote && stepLabel && (
+          <div className="col-span-2 sm:col-span-1">
+            <dt className="text-ink-muted">From {displayNote(previousNote)}</dt>
+            <dd className="mt-0.5 text-ink-foreground">{stepLabel}</dd>
+          </div>
+        )}
       </dl>
     </div>
   );
@@ -353,7 +495,9 @@ function ReadReadout({ index, miss }: { index: number | null; miss: string | nul
   if (miss)
     return (
       <div>
-        <p className="font-display text-6xl leading-none text-ink-foreground md:text-7xl">{displayNote(miss)}</p>
+        <p className="font-display text-5xl leading-none text-ink-foreground sm:text-6xl md:text-7xl">
+          {displayNote(miss)}
+        </p>
         <p className="mt-4 max-w-md text-[0.95rem] leading-relaxed text-ink-foreground/85">
           Not part of this C major scale. Find one of the eight notes on the staff — the white keys from middle
           C upward.
@@ -364,7 +508,9 @@ function ReadReadout({ index, miss }: { index: number | null; miss: string | nul
   if (!item) return null;
   return (
     <div>
-      <p className="font-display text-6xl leading-none text-ink-foreground md:text-7xl">{displayNote(item.note)}</p>
+      <p className="font-display text-5xl leading-none text-ink-foreground sm:text-6xl md:text-7xl">
+        {displayNote(item.note)}
+      </p>
       <p className="mt-4 max-w-md text-[0.95rem] leading-relaxed text-ink-foreground/85">{item.position}</p>
     </div>
   );

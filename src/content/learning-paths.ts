@@ -39,6 +39,7 @@ export const LEARNING_LEVELS: LearningLevel[] = [
       { title: "Intervals", detail: "Measuring the distance between two notes by number and quality." },
       { title: "Key signatures", detail: "The order of sharps and flats, and the circle of fifths." },
       { title: "Simple meters", detail: "2/4, 3/4 and 4/4 — how beats are grouped and accented." },
+      { title: "Rests and dotted values", detail: "Reading silence accurately and extending durations by half their value." },
     ],
   },
   {

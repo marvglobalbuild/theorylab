@@ -32,9 +32,9 @@ export function MusicPlayer() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.8, ease: EASE, delay: 1.6 }}
-      className="fixed right-3 bottom-3 z-40 md:right-6 md:bottom-6"
+      className="fixed right-3 bottom-3 z-40 max-w-[calc(100vw-1.5rem)] md:right-6 md:bottom-6"
     >
-      <div className="relative flex items-center gap-3 overflow-hidden rounded-full border border-ink-border bg-ink-deep/95 py-1.5 pr-4 pl-1.5 text-ink-foreground shadow-[var(--shadow-lift)] backdrop-blur">
+      <div className="relative flex max-w-full items-center gap-3 overflow-hidden rounded-full border border-ink-border bg-ink-deep/95 py-1.5 pr-4 pl-1.5 text-ink-foreground shadow-[var(--shadow-lift)] backdrop-blur">
         <button
           type="button"
           onClick={toggleBackgroundMusic}

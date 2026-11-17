@@ -1,5 +1,5 @@
 import { motion, useReducedMotion, useScroll, useTransform } from "motion/react";
-import { useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -23,7 +23,7 @@ export function Reveal({ children, delay = 0, y = 24, className, as = "div" }: R
       className={className}
       initial={{ opacity: 0, y }}
       whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "0px 0px -12% 0px" }}
+      viewport={{ once: true, margin: "0px 0px -8% 0px" }}
       transition={{ duration: DURATION, ease: EASE, delay }}
     >
       {children}
@@ -52,11 +52,11 @@ export function WordReveal({
   const words = text.split(" ");
   const trigger = animateOnMount
     ? { animate: { y: "0%" } }
-    : { whileInView: { y: "0%" }, viewport: { once: true, margin: "0px 0px -10% 0px" } };
+    : { whileInView: { y: "0%" }, viewport: { once: true, margin: "0px 0px -8% 0px" } };
   return (
     <Tag className={className} aria-label={text}>
       {words.map((word, i) => (
-        <span key={i} aria-hidden className="inline-block overflow-hidden pb-[0.12em] align-top">
+        <span key={i} aria-hidden className="inline-block overflow-hidden pr-[0.06em] pb-[0.18em] -mr-[0.06em] align-top">
           <motion.span
             className={cn("inline-block", emphasis.includes(word) && emphasisClassName)}
             initial={{ y: "105%" }}
@@ -96,8 +96,12 @@ export function RevealImage({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "end start"] });
-  const y = useTransform(scrollYProgress, [0, 1], reduce ? [0, 0] : [-parallax, parallax]);
+  const y = useTransform(scrollYProgress, [0, 1], [-parallax, parallax]);
   const trigger = priority
     ? { animate: { clipPath: "inset(0% 0% 0% 0%)" } }
     : { whileInView: { clipPath: "inset(0% 0% 0% 0%)" }, viewport: { once: true, margin: "0px 0px -10% 0px" } };
@@ -118,7 +122,7 @@ export function RevealImage({
         loading={priority ? "eager" : "lazy"}
         fetchPriority={priority ? "high" : "auto"}
         decoding="async"
-        style={{ y }}
+        {...(mounted && !reduce ? { style: { y } } : {})}
         className={cn("absolute inset-x-0 -top-10 h-[calc(100%+5rem)] w-full object-cover", imgClassName)}
       />
     </motion.div>

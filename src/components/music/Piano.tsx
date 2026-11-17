@@ -111,7 +111,7 @@ export function Piano({
           <div key={white.note} className={cn("relative flex-1", hiddenOnMobile && "hidden md:block")}>
             <button
               {...keyProps(white)}
-              className="key-white flex h-full w-full flex-col items-center justify-end rounded-b-[3px] pb-3 outline-offset-[-4px]"
+              className="key-white flex h-full w-full flex-col items-center justify-end rounded-b-[3px] pb-2.5 outline-offset-[-4px] md:pb-3"
             >
               {showLabels && (
                 <>

@@ -20,8 +20,10 @@ export function Hero() {
   const ref = useRef<HTMLElement>(null);
   const reduce = useReducedMotion();
   // Parallax only where the score card floats beside the image (large screens)
+  const [mounted, setMounted] = useState(false);
   const [isWide, setIsWide] = useState(false);
   useEffect(() => {
+    setMounted(true);
     const mq = window.matchMedia("(min-width: 1024px)");
     const update = () => setIsWide(mq.matches);
     update();
@@ -48,8 +50,12 @@ export function Hero() {
   };
 
   return (
-    <section ref={ref} id={SECTION_IDS.top} className="relative overflow-hidden pt-28 md:pt-32 lg:pt-36">
-      <div className="container-editorial grid items-end gap-12 lg:grid-cols-12 lg:gap-10">
+    <section
+      ref={ref}
+      id={SECTION_IDS.top}
+      className="relative overflow-hidden pt-24 md:pt-32 lg:pt-36"
+    >
+      <div className="container-editorial grid items-end gap-10 md:gap-12 lg:grid-cols-12 lg:gap-10">
         <div className="relative z-10 pb-4 lg:col-span-6 lg:pb-24">
           <motion.p
             className="eyebrow flex items-center gap-3 text-muted-foreground"
@@ -76,16 +82,21 @@ export function Hero() {
             transition={{ duration: 1, ease: EASE, delay: 0.75 }}
           >
             <p className="type-lede measure mt-8 text-muted-foreground">
-              Explore the language of music through interactive lessons, visual demonstrations and listening
-              experiences designed to make every concept come alive.
+              Explore the language of music through interactive lessons, visual demonstrations and
+              listening experiences designed to make every concept come alive.
             </p>
             <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
               <Button asChild size="lg">
-                <Link to="/start">
+                <Link to="/register">
                   Start learning <ArrowRight />
                 </Link>
               </Button>
-              <Button asChild size="lg" variant="outline" className="hover:[&_svg]:translate-x-0 hover:[&_svg]:translate-y-0.5">
+              <Button
+                asChild
+                size="lg"
+                variant="outline"
+                className="hover:[&_svg]:translate-x-0 hover:[&_svg]:translate-y-0.5"
+              >
                 <SectionLink hash={SECTION_IDS.experience}>
                   Explore the experience <ArrowDown />
                 </SectionLink>
@@ -119,24 +130,27 @@ export function Hero() {
 
           {/* Score card: engraved arpeggio that draws in, playable on request */}
           <motion.figure
-            style={{ y: cardY }}
+            {...(mounted && isWide && !reduce ? { style: { y: cardY } } : {})}
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1.1, ease: EASE, delay: 0.9 }}
             className="relative z-10 mx-4 -mt-16 border border-border bg-paper p-4 shadow-[var(--shadow-lift)] sm:mx-auto sm:max-w-sm lg:absolute lg:bottom-14 lg:-left-24 lg:mx-0 lg:mt-0 lg:w-[22rem]"
           >
             <Staff
-              chords={[...ARPEGGIO.map((k) => ({ keys: [k], duration: "q" as const })), { keys: ARPEGGIO, duration: "w" }]}
+              chords={[
+                ...ARPEGGIO.map((k) => ({ keys: [k], duration: "q" as const })),
+                { keys: ARPEGGIO, duration: "w" },
+              ]}
               height={130}
               revealNotes
               selectedIndex={lit}
               onSelect={playOne}
               label="C major arpeggio — C, E, G, C — followed by the full chord"
             />
-            <figcaption className="mt-2 flex items-center justify-between gap-4 border-t border-border pt-3">
+            <figcaption className="mt-2 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3 sm:flex-nowrap sm:gap-4">
               <span className="text-xs leading-snug text-muted-foreground">
-                <span className="font-display text-base italic text-foreground">C major</span>, broken then
-                together — tap a note
+                <span className="font-display text-base italic text-foreground">C major</span>,
+                broken then together — tap a note
               </span>
               <button
                 type="button"
@@ -159,7 +173,7 @@ export function Hero() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.9, ease: EASE, delay: 1.1 + i * 0.08 }}
-              className="flex items-baseline gap-3 border-border py-5 md:border-l md:pl-6 md:first:border-l-0 md:first:pl-0 [&:nth-child(even)]:border-l [&:nth-child(even)]:pl-5 md:[&:nth-child(even)]:pl-6"
+              className="flex items-baseline gap-3 border-border py-4 sm:py-5 md:border-l md:pl-6 md:first:border-l-0 md:first:pl-0 [&:nth-child(even)]:border-l [&:nth-child(even)]:pl-4 sm:[&:nth-child(even)]:pl-5 md:[&:nth-child(even)]:pl-6 [&:nth-child(n+3)]:border-t md:[&:nth-child(n+3)]:border-t-0"
             >
               <span className="text-xs tabular-nums text-crimson-deep">0{i + 1}</span>
               <span className="font-display text-xl sm:text-2xl md:text-[1.7rem]">

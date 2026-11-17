@@ -28,8 +28,8 @@ const PILLARS = [
 
 export function LearningIntro() {
   return (
-    <section id={SECTION_IDS.about} className="border-y border-border bg-paper py-24 md:py-32">
-      <div className="container-editorial grid gap-16 lg:grid-cols-12 lg:gap-10">
+    <section id={SECTION_IDS.about} className="border-y border-border bg-paper py-16 md:py-28 lg:py-32">
+      <div className="container-editorial grid gap-12 md:gap-16 lg:grid-cols-12 lg:gap-10">
         <div className="lg:col-span-5">
           <SectionHeading
             number="01"

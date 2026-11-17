@@ -1,12 +1,16 @@
 /**
  * The single place where the app chooses service implementations.
- * Swap these exports for backend-backed versions when the backend is connected.
+ * Authentication and profile/role services are connected to Supabase Auth and PostgreSQL.
  */
 export {
-  previewAuthService as authService,
-  previewProfileService as profileService,
+  supabaseAuthService as authService,
+  supabaseProfileService as profileService,
+} from "./supabase-auth";
+export { supabaseAcademyService as academyService } from "./supabase-academy";
+export {
   previewProgressService as progressService,
   previewCourseService as courseService,
   previewAssessmentService as assessmentService,
+  previewWorkspaceService as workspaceService,
 } from "./preview";
 export type * from "./contracts";

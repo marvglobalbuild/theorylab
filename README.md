@@ -1,26 +1,23 @@
-# Theorylab
+# THEORYLAB
 
-Implement exactly the screenshot and nothing else
+**Understand Music. Read Music. Hear Music. Create Music.**
 
-This project was built with [Lovable](https://lovable.dev).
+THEORYLAB is an interactive classical music theory education platform for independent learners, students, lecturers, and administrators — built with React, TypeScript, Vite, TanStack Start/Router, Tailwind CSS, Tone.js, VexFlow, and Supabase.
 
-**Live app**: https://theorylab.lovable.app
+## Documentation
 
-## Build with Lovable
+Official product, architecture, and roadmap specifications live under `/docs`:
 
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/f435dd2a-b288-4a28-a529-2b520f1c8358).
+- [Master Product Requirements (`docs/PRODUCT_REQUIREMENTS.md`)](./docs/PRODUCT_REQUIREMENTS.md) — Core educational positioning, user roles, preserved workspaces, and future Music Intelligence Studio requirements.
+- [Module & Navigation Architecture (`docs/MODULE_AND_NAVIGATION_ARCHITECTURE.md`)](./docs/MODULE_AND_NAVIGATION_ARCHITECTURE.md) — Route map, role boundaries, workspace navigation, and planned Music Intelligence Studio flows.
+- [System & Technical Architecture (`docs/SYSTEM_ARCHITECTURE.md`)](./docs/SYSTEM_ARCHITECTURE.md) — Frontend stack, Supabase Auth/PostgreSQL/RLS design, dedicated audio processing worker architecture, security rules, and AI provider evaluation criteria.
+- [Official Development Roadmap (`docs/ROADMAP.md`)](./docs/ROADMAP.md) — 11-phase roadmap from Application Foundation and Authentication through Curriculum, Workspaces, and Music Intelligence Studio.
 
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
-
-## Development
-
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+## Local Development
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
+npm install
 npm run dev
 ```
+
+Copy `.env.example` to `.env.local` and supply your Supabase project's public `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` before testing live authentication.

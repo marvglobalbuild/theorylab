@@ -39,7 +39,7 @@ export function SiteHeader({ solid = false }: { solid?: boolean }) {
           raised ? "h-16" : "h-20",
         )}
       >
-        <SectionLink hash="top" className="rounded-sm text-foreground" >
+        <SectionLink hash="top" className="rounded-sm text-foreground">
           <Wordmark />
           <span className="sr-only">— home</span>
         </SectionLink>
@@ -67,7 +67,7 @@ export function SiteHeader({ solid = false }: { solid?: boolean }) {
             Sign in
           </Link>
           <Button asChild size="sm">
-            <Link to="/start">
+            <Link to="/register">
               Start learning <ArrowRight />
             </Link>
           </Button>
@@ -104,7 +104,10 @@ export function SiteHeader({ solid = false }: { solid?: boolean }) {
                         <X className="size-5" />
                       </Dialog.Close>
                     </div>
-                    <nav aria-label="Mobile" className="container-editorial flex-1 overflow-y-auto pt-6">
+                    <nav
+                      aria-label="Mobile"
+                      className="container-editorial flex-1 overflow-y-auto pt-6"
+                    >
                       <ul className="border-t border-border">
                         {NAV_LINKS.map((link, i) => (
                           <motion.li
@@ -128,7 +131,7 @@ export function SiteHeader({ solid = false }: { solid?: boolean }) {
                     </nav>
                     <div className="container-editorial grid gap-3 pb-8">
                       <Button asChild size="lg">
-                        <Link to="/start" onClick={() => setOpen(false)}>
+                        <Link to="/register" onClick={() => setOpen(false)}>
                           Start learning <ArrowRight />
                         </Link>
                       </Button>

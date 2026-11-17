@@ -6,7 +6,6 @@ import { Experience } from "@/components/sections/Experience";
 import { Features } from "@/components/sections/Features";
 import { FinalCta } from "@/components/sections/FinalCta";
 import { Hero } from "@/components/sections/Hero";
-import { HowItWorks } from "@/components/sections/HowItWorks";
 import { LearningIntro } from "@/components/sections/LearningIntro";
 import { LearningPaths } from "@/components/sections/LearningPaths";
 import { Lecturers } from "@/components/sections/Lecturers";
@@ -48,7 +47,6 @@ function Home() {
         <Experience />
         <LearningPaths />
         <Features />
-        <HowItWorks />
         <Lecturers />
         <FinalCta />
       </main>

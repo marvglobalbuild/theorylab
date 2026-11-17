@@ -64,6 +64,9 @@
   --color-key-ebony-top: var(--key-ebony-top);
 
   --ease-editorial: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --animate-accordion-down: accordion-down 420ms var(--ease-editorial);
+  --animate-accordion-up: accordion-up 340ms var(--ease-editorial);
 }
 
 :root {
@@ -331,5 +334,35 @@
   .music-bar {
     animation: none;
     height: 10px;
+  }
+}
+
+/* Radix accordion open / close */
+@keyframes accordion-down {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+  to {
+    height: var(--radix-accordion-content-height);
+    opacity: 1;
+  }
+}
+
+@keyframes accordion-up {
+  from {
+    height: var(--radix-accordion-content-height);
+    opacity: 1;
+  }
+  to {
+    height: 0;
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-state="open"].animate-accordion-down,
+  [data-state="closed"].animate-accordion-up {
+    animation: none;
   }
 }

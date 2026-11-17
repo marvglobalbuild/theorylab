@@ -38,28 +38,111 @@ function Feature({
   );
 }
 
-/** Treble staff lines labelled E G B D F, bottom to top. */
+const TREBLE_LINES = [
+  { letter: "F", note: "F5", label: "5th line — F5" },
+  { letter: "D", note: "D5", label: "4th line — D5" },
+  { letter: "B", note: "B4", label: "3rd line — B4" },
+  { letter: "G", note: "G4", label: "2nd line — G4" },
+  { letter: "E", note: "E4", label: "1st line — E4" },
+];
+
+/** Treble staff lines labelled E G B D F, bottom to top — interactive. */
 function LineNames() {
-  const lines = ["F", "D", "B", "G", "E"];
+  const piano = usePiano();
+  const [lit, setLit] = useState<number | null>(2);
+
+  const playLine = (index: number) => {
+    const line = TREBLE_LINES[index];
+    if (!line) return;
+    piano.playPhrase([{ notes: [line.note], at: 0, duration: 0.9 }], (s) => setLit(s ? index : index));
+  };
+
+  const playAll = () => {
+    const ascending = [...TREBLE_LINES].reverse();
+    const steps: PhraseStep[] = ascending.map((line, i) => ({
+      notes: [line.note],
+      at: i * 0.45,
+      duration: i === ascending.length - 1 ? 1.1 : 0.45,
+    }));
+    piano.playPhrase(steps, (s) => {
+      if (!s) return;
+      const idx = steps.indexOf(s);
+      if (idx >= 0) setLit(TREBLE_LINES.length - 1 - idx);
+    });
+  };
+
+  const activeLine = (lit !== null ? TREBLE_LINES[lit] : undefined) ?? TREBLE_LINES[2]!;
+
   return (
     <div className="mt-auto pt-10">
-      <svg viewBox="0 0 320 84" className="w-full text-foreground" role="img" aria-label="The five lines of the treble staff, from the bottom: E, G, B, D, F">
-        {lines.map((letter, i) => {
+      <svg
+        viewBox="0 0 320 84"
+        className="w-full text-foreground"
+        role="group"
+        aria-label="The five lines of the treble staff, from the bottom: E, G, B, D, F. Select any note to hear it."
+      >
+        {TREBLE_LINES.map((line, i) => {
           const y = 10 + i * 16;
+          const cx = 40 + (4 - i) * 52;
+          const active = lit === i;
           return (
-            <g key={letter}>
-              <line x1="0" x2="268" y1={y} y2={y} stroke="currentColor" strokeWidth="0.9" opacity="0.6" />
-              <ellipse cx={40 + (4 - i) * 52} cy={y} rx="7" ry="5" transform={`rotate(-20 ${40 + (4 - i) * 52} ${y})`} className={i === 2 ? "fill-primary" : "fill-foreground"} />
-              <text x="284" y={y + 5} className="fill-muted-foreground font-display text-[15px] italic">
-                {letter}
+            <g key={line.letter}>
+              <line
+                x1="0"
+                x2="268"
+                y1={y}
+                y2={y}
+                stroke="currentColor"
+                strokeWidth={active ? "1.3" : "0.9"}
+                opacity={active ? "0.95" : "0.55"}
+              />
+              <g
+                role="button"
+                tabIndex={0}
+                aria-label={`Play ${line.label}`}
+                aria-pressed={active}
+                onClick={() => playLine(i)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    playLine(i);
+                  }
+                }}
+                className="cursor-pointer outline-none"
+              >
+                <circle cx={cx} cy={y} r="14" fill="transparent" />
+                <ellipse
+                  cx={cx}
+                  cy={y}
+                  rx="7.5"
+                  ry="5.2"
+                  transform={`rotate(-20 ${cx} ${y})`}
+                  className={cn(
+                    "transition-colors duration-200",
+                    active ? "fill-primary" : "fill-foreground hover:fill-crimson",
+                  )}
+                />
+              </g>
+              <text
+                x="284"
+                y={y + 5}
+                className={cn(
+                  "font-display text-[15px] italic transition-colors",
+                  active ? "fill-primary" : "fill-muted-foreground",
+                )}
+              >
+                {line.letter}
               </text>
             </g>
           );
         })}
       </svg>
-      <p className="mt-3 text-xs text-muted-foreground">
-        Lines of the treble staff, from the bottom: <span className="italic">Every Good Boy Deserves Fun.</span>
-      </p>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs text-muted-foreground">
+          {activeLine.label} — <span className="italic">Every Good Boy Deserves Fun.</span>
+        </p>
+        <PlayChip onClick={playAll}>Hear all lines</PlayChip>
+      </div>
     </div>
   );
 }
@@ -152,18 +235,32 @@ function RhythmBar() {
     }
     piano.playPhrase(steps, (s) => setLit(s ? steps.indexOf(s) % RHYTHM.length : null));
   };
+  const playSingle = (index: number) => {
+    const v = RHYTHM[index];
+    if (!v) return;
+    piano.playPhrase([{ notes: ["G4"], at: 0, duration: v.beats * BEAT * 0.85 }], (s) =>
+      setLit(s ? index : null),
+    );
+  };
   return (
     <div className="mt-auto pt-10">
-      <div className="flex items-end gap-1" aria-hidden>
+      <div className="flex items-end gap-1" role="group" aria-label="Rhythm values in one bar of 4/4">
         {RHYTHM.map((v, i) => (
-          <div key={i} style={{ flexGrow: v.beats }} className="basis-0">
+          <button
+            key={i}
+            type="button"
+            onClick={() => playSingle(i)}
+            aria-label={`Play ${v.label} (${v.beats} beat${v.beats === 1 ? "" : "s"})`}
+            style={{ flexGrow: v.beats }}
+            className="basis-0 cursor-pointer py-1 text-left"
+          >
             <div
               className={cn(
-                "h-10 rounded-[2px] transition-[background-color,transform] duration-150",
+                "h-10 rounded-[2px] transition-[background-color,transform] duration-150 hover:opacity-90",
                 lit === i ? "-translate-y-1 bg-crimson" : v.beats < 1 ? "bg-primary/75" : "bg-foreground/85",
               )}
             />
-          </div>
+          </button>
         ))}
       </div>
       <div className="mt-2 grid grid-cols-4 text-xs text-muted-foreground" aria-hidden>
@@ -217,7 +314,7 @@ function TriadDemo() {
 
 export function Features() {
   return (
-    <section id={SECTION_IDS.features} className="border-t border-border bg-secondary py-24 md:py-32">
+    <section id={SECTION_IDS.features} className="border-t border-border bg-secondary py-16 md:py-28 lg:py-32">
       <div className="container-editorial">
         <SectionHeading
           number="04"

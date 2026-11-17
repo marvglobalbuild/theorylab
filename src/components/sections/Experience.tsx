@@ -5,7 +5,7 @@ import { SectionHeading } from "./SectionHeading";
 
 export function Experience() {
   return (
-    <section id={SECTION_IDS.experience} className="bg-ink py-24 text-ink-foreground md:py-32">
+    <section id={SECTION_IDS.experience} className="bg-ink py-16 text-ink-foreground md:py-28 lg:py-32">
       <div className="container-editorial">
         <div className="grid gap-8 lg:grid-cols-12 lg:items-end">
           <SectionHeading

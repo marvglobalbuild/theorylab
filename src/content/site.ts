@@ -5,14 +5,12 @@ export const SECTION_IDS = {
   experience: "experience",
   learningPaths: "learning-paths",
   features: "features",
-  howItWorks: "how-it-works",
   lecturers: "lecturers",
 } as const;
 
 export const NAV_LINKS = [
   { label: "Home", hash: SECTION_IDS.top },
   { label: "Learning paths", hash: SECTION_IDS.learningPaths },
-  { label: "How it works", hash: SECTION_IDS.howItWorks },
   { label: "For lecturers", hash: SECTION_IDS.lecturers },
   { label: "About", hash: SECTION_IDS.about },
 ] as const;
