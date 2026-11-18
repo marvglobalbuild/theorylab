@@ -155,7 +155,7 @@ function pickResumeLesson(
 
 export function buildCanonicalAcademyCatalog(
   source: Exclude<AcademyCatalogSource, "supabase">,
-  statusNotice: string,
+  statusNotice: string | null = null,
 ): AcademyCatalog {
   const orderedLessons: AcademyLesson[] = [];
 
@@ -370,7 +370,7 @@ export function createSupabaseAcademyService(
           status: "ok",
           data: buildCanonicalAcademyCatalog(
             "fallback_unconfigured",
-            "Supabase environment variables are not configured in this preview. Studying from the complete Theory Academy syllabus in read-only mode.",
+            null,
           ),
         };
       }
@@ -436,7 +436,7 @@ export function createSupabaseAcademyService(
             status: "ok",
             data: buildCanonicalAcademyCatalog(
               "fallback_empty_db",
-              "Connected to Supabase, but no published curriculum records exist in the database yet. Displaying the canonical Theory Academy syllabus in read-only mode until curriculum records are seeded.",
+              null,
             ),
           };
         }

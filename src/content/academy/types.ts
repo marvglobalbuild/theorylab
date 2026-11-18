@@ -53,6 +53,36 @@ export interface AcademyPracticeQuestion {
   audioLabel?: string | undefined;
 }
 
+export interface AcademyTerminologyItem {
+  term: string;
+  definition: string;
+}
+
+export interface AcademyKeyboardIllustration {
+  activeNotes?: string[] | undefined;
+  highlightNotes?: string[] | undefined;
+  showLabels?: boolean | undefined;
+  label?: string | undefined;
+  caption?: string | undefined;
+}
+
+export interface AcademyVideoResource {
+  title: string;
+  publisher: string;
+  url: string;
+  embedUrl?: string | undefined;
+  embedPermitted: boolean;
+  notes?: string | undefined;
+}
+
+export interface AcademyReferenceItem {
+  title: string;
+  authorOrInstitution: string;
+  url: string;
+  licence?: string | undefined;
+  relevance?: string | undefined;
+}
+
 export interface AcademyLessonContent {
   slug: string;
   title: string;
@@ -70,6 +100,11 @@ export interface AcademyLessonContent {
   practiceActivities: AcademyPracticeQuestion[];
   summaryText: string;
   keyTakeaways: string[];
+  terminology?: AcademyTerminologyItem[] | undefined;
+  keyboardIllustration?: AcademyKeyboardIllustration | undefined;
+  practicalApplication?: string | undefined;
+  videoResource?: AcademyVideoResource | undefined;
+  references?: AcademyReferenceItem[] | undefined;
 }
 
 export interface AcademyModuleDefinition {

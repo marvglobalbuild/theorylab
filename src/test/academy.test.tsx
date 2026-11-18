@@ -187,7 +187,7 @@ function createMockSupabaseForAcademy({
 }
 
 describe("Theory Academy curriculum structure & completeness", () => {
-  it("contains all 4 required learning paths and 39 distinct topics", () => {
+  it("contains all 4 required learning paths and 46 distinct topics", () => {
     expect(ACADEMY_LEARNING_PATHS.map((p) => p.title)).toEqual([
       "Foundations of Music",
       "Scales and Tonality",
@@ -195,15 +195,15 @@ describe("Theory Academy curriculum structure & completeness", () => {
       "Rhythm and Musical Reading",
     ]);
 
-    expect(ACADEMY_LESSONS).toHaveLength(39);
+    expect(ACADEMY_LESSONS).toHaveLength(46);
     const uniqueSlugs = new Set(ACADEMY_LESSONS.map((l) => l.slug));
-    expect(uniqueSlugs.size).toBe(39);
+    expect(uniqueSlugs.size).toBe(46);
 
     const expectedCounts: Record<string, number> = {
-      "foundations-of-music": 10,
-      "scales-and-tonality": 9,
-      "intervals-and-harmony": 10,
-      "rhythm-and-musical-reading": 10,
+      "foundations-of-music": 11,
+      "scales-and-tonality": 11,
+      "intervals-and-harmony": 12,
+      "rhythm-and-musical-reading": 12,
     };
 
     Object.entries(expectedCounts).forEach(([pathSlug, count]) => {
@@ -235,7 +235,7 @@ describe("supabaseAcademyService", () => {
     if (cat.status === "ok") {
       expect(cat.data.source).toBe("fallback_unconfigured");
       expect(cat.data.persistenceAvailable).toBe(false);
-      expect(cat.data.lessons).toHaveLength(39);
+      expect(cat.data.lessons).toHaveLength(46);
     }
 
     const visit = await svc.recordLessonVisit({
@@ -261,7 +261,7 @@ describe("supabaseAcademyService", () => {
     if (cat.status === "ok") {
       expect(cat.data.source).toBe("fallback_empty_db");
       expect(cat.data.persistenceAvailable).toBe(false);
-      expect(cat.data.lessons).toHaveLength(39);
+      expect(cat.data.lessons).toHaveLength(46);
     }
   });
 
@@ -487,7 +487,7 @@ describe("Theory Academy UI integration", () => {
     render(<ProgressPage />, { wrapper: createWrapper() });
 
     await waitFor(() => {
-      expect(screen.getByText("1/39")).toBeInTheDocument();
+      expect(screen.getByText("1/46")).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("tab", { name: /Completed \(1\)/i }));

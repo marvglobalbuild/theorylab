@@ -1,107 +1,95 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight, Play } from "lucide-react";
+import {
+  BookOpen,
+  Compass,
+  GraduationCap,
+  Hammer,
+  Sparkles,
+  Trophy,
+} from "lucide-react";
 import { useState } from "react";
 
-import { Staff } from "@/components/music/Staff";
-import { Button } from "@/components/ui/button";
 import { PageHeader, PreviewNotice } from "@/components/workspace/WorkspacePrimitives";
-import { TREBLE_READING, displayNote } from "@/lib/music/theory";
-import { usePiano, type PhraseStep } from "@/lib/music/usePiano";
+import { NotationConstructor } from "@/components/notation-lab/NotationConstructor";
+import { NotationExplorer } from "@/components/notation-lab/NotationExplorer";
+import { NotationGuidedExercises } from "@/components/notation-lab/NotationGuidedExercises";
+import { NotationTheoryGuide } from "@/components/notation-lab/NotationTheoryGuide";
+import { NotationTrainer } from "@/components/notation-lab/NotationTrainer";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/learn/notation")({
   head: () => ({
-    meta: [{ title: "Notation Lab · Learner Studio — THEORYLAB" }],
+    meta: [{ title: "Music Notation Lab · Interactive Labs — THEORYLAB" }],
   }),
   component: LearnerNotationPage,
 });
 
+type NotationTab = "explorer" | "trainer" | "constructor" | "guided" | "theory";
+
+const LAB_TABS: { id: NotationTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { id: "explorer", label: "Read & Inspect", icon: Compass },
+  { id: "trainer", label: "Note Trainer", icon: Trophy },
+  { id: "constructor", label: "Note Builder", icon: Hammer },
+  { id: "guided", label: "Guided Practice", icon: GraduationCap },
+  { id: "theory", label: "Theory Guide", icon: BookOpen },
+];
+
 function LearnerNotationPage() {
-  const piano = usePiano();
-  const [selectedIndex, setSelectedIndex] = useState<number>(0);
-
-  const chords = TREBLE_READING.map((item) => ({ keys: [item.note], duration: "q" as const }));
-  const current = TREBLE_READING[selectedIndex] ?? TREBLE_READING[0]!;
-
-  const selectNote = (index: number) => {
-    setSelectedIndex(index);
-    const target = TREBLE_READING[index];
-    if (!target) return;
-    piano.playPhrase([{ notes: [target.note], at: 0, duration: 0.9 }]);
-  };
-
-  const playScale = () => {
-    const steps: PhraseStep[] = TREBLE_READING.map((item, i) => ({
-      notes: [item.note],
-      at: i * 0.42,
-      duration: i === TREBLE_READING.length - 1 ? 1.1 : 0.45,
-    }));
-    piano.playPhrase(steps, (s) => {
-      if (!s) return;
-      const idx = steps.indexOf(s);
-      if (idx >= 0) setSelectedIndex(idx);
-    });
-  };
+  const [activeTab, setActiveTab] = useState<NotationTab>("explorer");
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 pb-12">
       <PreviewNotice
-        title="Notation reading workspace"
-        message="Tap any note on the VexFlow staff below to hear its pitch and inspect its treble staff placement."
+        title="Interactive Music Labs · Module 1: Notation"
+        message="Full interactive VexFlow staff engraving and Tone.js sound synthesis are active. All exercises, note placement, and pitch identification operate in real-time."
       />
 
-      <PageHeader
-        eyebrow="Music Notation Lab"
-        title="Treble staff reading"
-        description="Read pitch positions from middle C up to C5 on the engraved treble staff."
-      />
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <PageHeader
+          eyebrow="Interactive Music Labs · Module 1"
+          title="Music Notation Lab"
+          description="Read, identify, construct, and master pitch notation across Treble and Bass staves with interactive engraving and audio feedback."
+        />
 
-      <div className="grid gap-6 lg:grid-cols-12">
-        <div className="rounded-[2px] border border-border bg-paper p-6 lg:col-span-7">
-          <div className="mb-3 flex items-center justify-between">
-            <span className="eyebrow text-muted-foreground">Treble clef · C4 to C5</span>
-            <Button type="button" size="sm" onClick={playScale}>
-              <Play className="size-3.5" aria-hidden /> Play full scale
-            </Button>
-          </div>
-          <Staff
-            chords={chords}
-            height={170}
-            selectedIndex={selectedIndex}
-            onSelect={selectNote}
-            label="Treble staff showing notes C4 through C5"
-          />
+        <div className="flex items-center gap-2 rounded border border-border bg-paper px-3 py-1.5 text-xs text-muted-foreground shrink-0">
+          <Sparkles className="size-3.5 text-crimson-deep" />
+          <span>VexFlow + Web Audio Synthesis Active</span>
         </div>
+      </div>
 
-        <div className="flex flex-col justify-between rounded-[2px] border border-border bg-paper p-6 lg:col-span-5">
-          <div>
-            <p className="eyebrow text-crimson-deep">Selected pitch</p>
-            <p className="mt-3 font-display text-5xl leading-none text-foreground">
-              {displayNote(current.note)}
-            </p>
-            <p className="mt-4 text-sm leading-relaxed text-muted-foreground">{current.position}</p>
-          </div>
+      {/* Primary Navigation Tabs */}
+      <div className="border-b border-border">
+        <nav className="-mb-px flex space-x-2 sm:space-x-6 overflow-x-auto pb-1" aria-label="Notation Lab Sections">
+          {LAB_TABS.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={cn(
+                  "flex items-center gap-2 whitespace-nowrap border-b-2 py-3 px-2 text-xs sm:text-sm font-medium transition-colors",
+                  isActive
+                    ? "border-crimson text-crimson-deep font-semibold"
+                    : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
+                )}
+              >
+                <Icon className={cn("size-4", isActive ? "text-crimson" : "text-muted-foreground")} />
+                {tab.label}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
 
-          <div className="mt-8 flex flex-wrap gap-2 border-t border-border pt-5">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                selectNote((selectedIndex - 1 + TREBLE_READING.length) % TREBLE_READING.length)
-              }
-            >
-              <ChevronLeft className="size-4" aria-hidden /> Previous note
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => selectNote((selectedIndex + 1) % TREBLE_READING.length)}
-            >
-              Next note <ChevronRight className="size-4" aria-hidden />
-            </Button>
-          </div>
-        </div>
+      {/* Tab Panels */}
+      <div className="pt-2">
+        {activeTab === "explorer" && <NotationExplorer />}
+        {activeTab === "trainer" && <NotationTrainer />}
+        {activeTab === "constructor" && <NotationConstructor />}
+        {activeTab === "guided" && <NotationGuidedExercises />}
+        {activeTab === "theory" && <NotationTheoryGuide />}
       </div>
     </div>
   );

@@ -19,12 +19,19 @@ const SHARP_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#",
 const FLAT_NAMES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
 
 export function parseNote(name: string): ParsedNote {
-  const match = /^([A-G])(#|b)?(-?\d)$/.exec(name);
+  const trimmed = name.trim();
+  const match = /^([A-G])\s*(#|b|♯|♭|n|♮|natural)?\s*(-?\d+)?$/i.exec(trimmed);
   if (!match) throw new Error(`Invalid note name: ${name}`);
+  const letter = match[1]!.toUpperCase() as Letter;
+  const rawAcc = (match[2] ?? "").toLowerCase();
+  let accidental: Accidental = "";
+  if (rawAcc === "#" || rawAcc === "♯") accidental = "#";
+  else if (rawAcc === "b" || rawAcc === "♭") accidental = "b";
+  const octave = match[3] !== undefined ? Number(match[3]) : 4;
   return {
-    letter: match[1] as Letter,
-    accidental: (match[2] ?? "") as Accidental,
-    octave: Number(match[3]),
+    letter,
+    accidental,
+    octave,
   };
 }
 
@@ -49,11 +56,22 @@ export function noteFrequency(name: string): number {
   return midiToFrequency(noteToMidi(name));
 }
 
-/** "C#4" -> "C♯4", "Bb3" -> "B♭3" */
+/** "C#4" -> "C♯4", "Bb3" -> "B♭3", "A natural 4" -> "A♮4" */
 export function displayNote(name: string, withOctave = true): string {
-  const { letter, accidental, octave } = parseNote(name);
-  const symbol = accidental === "#" ? "♯" : accidental === "b" ? "♭" : "";
-  return `${letter}${symbol}${withOctave ? octave : ""}`;
+  const trimmed = name.trim();
+  const match = /^([A-G])\s*(#|b|♯|♭|n|♮|natural)?\s*(-?\d+)?$/i.exec(trimmed);
+  if (!match) {
+    return name;
+  }
+  const letter = match[1]!.toUpperCase();
+  const rawAcc = (match[2] ?? "").toLowerCase();
+  let symbol = "";
+  if (rawAcc === "#" || rawAcc === "♯") symbol = "♯";
+  else if (rawAcc === "b" || rawAcc === "♭") symbol = "♭";
+  else if (rawAcc === "n" || rawAcc === "♮" || rawAcc === "natural") symbol = "♮";
+
+  const octStr = withOctave && match[3] !== undefined ? match[3] : "";
+  return `${letter}${symbol}${octStr}`;
 }
 
 /** The other common spelling of a black-key note, or null for natural notes. */

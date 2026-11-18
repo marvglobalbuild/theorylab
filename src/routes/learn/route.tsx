@@ -20,6 +20,7 @@ const LEARNER_NAV: WorkspaceNavItem[] = [
   { to: "/learn/courses", label: "My Courses", icon: BookOpen },
   { to: "/learn/practice", label: "Quick Practice", icon: Piano },
   { to: "/learn/notation", label: "Notation Lab", icon: Music },
+  { to: "/learn/keyboard", label: "Virtual Keyboard", icon: Piano },
   { to: "/learn/assessments", label: "Assessments", icon: ClipboardCheck },
   { to: "/learn/progress", label: "Progress", icon: TrendingUp },
 ];
@@ -30,6 +31,7 @@ const TITLES: Record<string, string> = {
   "/learn/courses": "My Courses",
   "/learn/practice": "Quick Practice",
   "/learn/notation": "Notation Lab",
+  "/learn/keyboard": "Virtual Keyboard",
   "/learn/assessments": "Assessments",
   "/learn/progress": "Progress",
 };

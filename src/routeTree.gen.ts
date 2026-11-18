@@ -10,15 +10,51 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminRouteRouteImport } from './routes/admin/route'
 import { Route as ContactRouteImport } from './routes/contact'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as LearnRouteRouteImport } from './routes/learn/route'
 import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as RegisterRouteImport } from './routes/register'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as StartRouteImport } from './routes/start'
+import { Route as TeachRouteRouteImport } from './routes/teach/route'
 import { Route as TermsRouteImport } from './routes/terms'
+import { Route as VerifyEmailRouteImport } from './routes/verify-email'
+import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as AdminAnalyticsRouteImport } from './routes/admin/analytics'
+import { Route as AdminAssessmentsRouteImport } from './routes/admin/assessments'
+import { Route as AdminCurriculumRouteImport } from './routes/admin/curriculum'
+import { Route as AdminLecturersRouteImport } from './routes/admin/lecturers'
+import { Route as AdminLessonsRouteImport } from './routes/admin/lessons'
+import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
+import { Route as AdminUsersRouteImport } from './routes/admin/users'
+import { Route as LearnIndexRouteImport } from './routes/learn/index'
+import { Route as LearnAssessmentsRouteImport } from './routes/learn/assessments'
+import { Route as LearnCoursesRouteImport } from './routes/learn/courses'
+import { Route as LearnKeyboardRouteImport } from './routes/learn/keyboard'
+import { Route as LearnNotationRouteImport } from './routes/learn/notation'
+import { Route as LearnPathsRouteImport } from './routes/learn/paths'
+import { Route as LearnPracticeRouteImport } from './routes/learn/practice'
+import { Route as LearnProgressRouteImport } from './routes/learn/progress'
+import { Route as TeachIndexRouteImport } from './routes/teach/index'
+import { Route as TeachAssessmentsRouteImport } from './routes/teach/assessments'
+import { Route as TeachAssignmentsRouteImport } from './routes/teach/assignments'
+import { Route as TeachClassesRouteImport } from './routes/teach/classes'
+import { Route as TeachPerformanceRouteImport } from './routes/teach/performance'
+import { Route as TeachResourcesRouteImport } from './routes/teach/resources'
+import { Route as TeachStudentsRouteImport } from './routes/teach/students'
+import { Route as LearnLessonsLessonSlugRouteImport } from './routes/learn/lessons/$lessonSlug'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRouteRoute = AdminRouteRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ContactRoute = ContactRouteImport.update({
@@ -26,9 +62,29 @@ const ContactRoute = ContactRouteImport.update({
   path: '/contact',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LearnRouteRoute = LearnRouteRouteImport.update({
+  id: '/learn',
+  path: '/learn',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RegisterRoute = RegisterRouteImport.update({
+  id: '/register',
+  path: '/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignInRoute = SignInRouteImport.update({
@@ -41,59 +97,388 @@ const StartRoute = StartRouteImport.update({
   path: '/start',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TeachRouteRoute = TeachRouteRouteImport.update({
+  id: '/teach',
+  path: '/teach',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TermsRoute = TermsRouteImport.update({
   id: '/terms',
   path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
+const VerifyEmailRoute = VerifyEmailRouteImport.update({
+  id: '/verify-email',
+  path: '/verify-email',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminAnalyticsRoute = AdminAnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminAssessmentsRoute = AdminAssessmentsRouteImport.update({
+  id: '/assessments',
+  path: '/assessments',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminCurriculumRoute = AdminCurriculumRouteImport.update({
+  id: '/curriculum',
+  path: '/curriculum',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminLecturersRoute = AdminLecturersRouteImport.update({
+  id: '/lecturers',
+  path: '/lecturers',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminLessonsRoute = AdminLessonsRouteImport.update({
+  id: '/lessons',
+  path: '/lessons',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminSettingsRoute = AdminSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminUsersRoute = AdminUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const LearnIndexRoute = LearnIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => LearnRouteRoute,
+} as any)
+const LearnAssessmentsRoute = LearnAssessmentsRouteImport.update({
+  id: '/assessments',
+  path: '/assessments',
+  getParentRoute: () => LearnRouteRoute,
+} as any)
+const LearnCoursesRoute = LearnCoursesRouteImport.update({
+  id: '/courses',
+  path: '/courses',
+  getParentRoute: () => LearnRouteRoute,
+} as any)
+const LearnKeyboardRoute = LearnKeyboardRouteImport.update({
+  id: '/keyboard',
+  path: '/keyboard',
+  getParentRoute: () => LearnRouteRoute,
+} as any)
+const LearnNotationRoute = LearnNotationRouteImport.update({
+  id: '/notation',
+  path: '/notation',
+  getParentRoute: () => LearnRouteRoute,
+} as any)
+const LearnPathsRoute = LearnPathsRouteImport.update({
+  id: '/paths',
+  path: '/paths',
+  getParentRoute: () => LearnRouteRoute,
+} as any)
+const LearnPracticeRoute = LearnPracticeRouteImport.update({
+  id: '/practice',
+  path: '/practice',
+  getParentRoute: () => LearnRouteRoute,
+} as any)
+const LearnProgressRoute = LearnProgressRouteImport.update({
+  id: '/progress',
+  path: '/progress',
+  getParentRoute: () => LearnRouteRoute,
+} as any)
+const TeachIndexRoute = TeachIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => TeachRouteRoute,
+} as any)
+const TeachAssessmentsRoute = TeachAssessmentsRouteImport.update({
+  id: '/assessments',
+  path: '/assessments',
+  getParentRoute: () => TeachRouteRoute,
+} as any)
+const TeachAssignmentsRoute = TeachAssignmentsRouteImport.update({
+  id: '/assignments',
+  path: '/assignments',
+  getParentRoute: () => TeachRouteRoute,
+} as any)
+const TeachClassesRoute = TeachClassesRouteImport.update({
+  id: '/classes',
+  path: '/classes',
+  getParentRoute: () => TeachRouteRoute,
+} as any)
+const TeachPerformanceRoute = TeachPerformanceRouteImport.update({
+  id: '/performance',
+  path: '/performance',
+  getParentRoute: () => TeachRouteRoute,
+} as any)
+const TeachResourcesRoute = TeachResourcesRouteImport.update({
+  id: '/resources',
+  path: '/resources',
+  getParentRoute: () => TeachRouteRoute,
+} as any)
+const TeachStudentsRoute = TeachStudentsRouteImport.update({
+  id: '/students',
+  path: '/students',
+  getParentRoute: () => TeachRouteRoute,
+} as any)
+const LearnLessonsLessonSlugRoute = LearnLessonsLessonSlugRouteImport.update({
+  id: '/lessons/$lessonSlug',
+  path: '/lessons/$lessonSlug',
+  getParentRoute: () => LearnRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteRouteWithChildren
+  '/learn': typeof LearnRouteRouteWithChildren
+  '/teach': typeof TeachRouteRouteWithChildren
   '/contact': typeof ContactRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/privacy': typeof PrivacyRoute
+  '/register': typeof RegisterRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/sign-in': typeof SignInRoute
   '/start': typeof StartRoute
   '/terms': typeof TermsRoute
+  '/verify-email': typeof VerifyEmailRoute
+  '/admin/analytics': typeof AdminAnalyticsRoute
+  '/admin/assessments': typeof AdminAssessmentsRoute
+  '/admin/curriculum': typeof AdminCurriculumRoute
+  '/admin/lecturers': typeof AdminLecturersRoute
+  '/admin/lessons': typeof AdminLessonsRoute
+  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/learn/assessments': typeof LearnAssessmentsRoute
+  '/learn/courses': typeof LearnCoursesRoute
+  '/learn/keyboard': typeof LearnKeyboardRoute
+  '/learn/notation': typeof LearnNotationRoute
+  '/learn/paths': typeof LearnPathsRoute
+  '/learn/practice': typeof LearnPracticeRoute
+  '/learn/progress': typeof LearnProgressRoute
+  '/teach/assessments': typeof TeachAssessmentsRoute
+  '/teach/assignments': typeof TeachAssignmentsRoute
+  '/teach/classes': typeof TeachClassesRoute
+  '/teach/performance': typeof TeachPerformanceRoute
+  '/teach/resources': typeof TeachResourcesRoute
+  '/teach/students': typeof TeachStudentsRoute
+  '/admin/': typeof AdminIndexRoute
+  '/learn/': typeof LearnIndexRoute
+  '/teach/': typeof TeachIndexRoute
+  '/learn/lessons/$lessonSlug': typeof LearnLessonsLessonSlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/contact': typeof ContactRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/privacy': typeof PrivacyRoute
+  '/register': typeof RegisterRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/sign-in': typeof SignInRoute
   '/start': typeof StartRoute
   '/terms': typeof TermsRoute
+  '/verify-email': typeof VerifyEmailRoute
+  '/admin/analytics': typeof AdminAnalyticsRoute
+  '/admin/assessments': typeof AdminAssessmentsRoute
+  '/admin/curriculum': typeof AdminCurriculumRoute
+  '/admin/lecturers': typeof AdminLecturersRoute
+  '/admin/lessons': typeof AdminLessonsRoute
+  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/learn/assessments': typeof LearnAssessmentsRoute
+  '/learn/courses': typeof LearnCoursesRoute
+  '/learn/keyboard': typeof LearnKeyboardRoute
+  '/learn/notation': typeof LearnNotationRoute
+  '/learn/paths': typeof LearnPathsRoute
+  '/learn/practice': typeof LearnPracticeRoute
+  '/learn/progress': typeof LearnProgressRoute
+  '/teach/assessments': typeof TeachAssessmentsRoute
+  '/teach/assignments': typeof TeachAssignmentsRoute
+  '/teach/classes': typeof TeachClassesRoute
+  '/teach/performance': typeof TeachPerformanceRoute
+  '/teach/resources': typeof TeachResourcesRoute
+  '/teach/students': typeof TeachStudentsRoute
+  '/admin': typeof AdminIndexRoute
+  '/learn': typeof LearnIndexRoute
+  '/teach': typeof TeachIndexRoute
+  '/learn/lessons/$lessonSlug': typeof LearnLessonsLessonSlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteRouteWithChildren
+  '/learn': typeof LearnRouteRouteWithChildren
+  '/teach': typeof TeachRouteRouteWithChildren
   '/contact': typeof ContactRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/privacy': typeof PrivacyRoute
+  '/register': typeof RegisterRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/sign-in': typeof SignInRoute
   '/start': typeof StartRoute
   '/terms': typeof TermsRoute
+  '/verify-email': typeof VerifyEmailRoute
+  '/admin/analytics': typeof AdminAnalyticsRoute
+  '/admin/assessments': typeof AdminAssessmentsRoute
+  '/admin/curriculum': typeof AdminCurriculumRoute
+  '/admin/lecturers': typeof AdminLecturersRoute
+  '/admin/lessons': typeof AdminLessonsRoute
+  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/learn/assessments': typeof LearnAssessmentsRoute
+  '/learn/courses': typeof LearnCoursesRoute
+  '/learn/keyboard': typeof LearnKeyboardRoute
+  '/learn/notation': typeof LearnNotationRoute
+  '/learn/paths': typeof LearnPathsRoute
+  '/learn/practice': typeof LearnPracticeRoute
+  '/learn/progress': typeof LearnProgressRoute
+  '/teach/assessments': typeof TeachAssessmentsRoute
+  '/teach/assignments': typeof TeachAssignmentsRoute
+  '/teach/classes': typeof TeachClassesRoute
+  '/teach/performance': typeof TeachPerformanceRoute
+  '/teach/resources': typeof TeachResourcesRoute
+  '/teach/students': typeof TeachStudentsRoute
+  '/admin/': typeof AdminIndexRoute
+  '/learn/': typeof LearnIndexRoute
+  '/teach/': typeof TeachIndexRoute
+  '/learn/lessons/$lessonSlug': typeof LearnLessonsLessonSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/contact' | '/privacy' | '/sign-in' | '/start' | '/terms'
-  fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/contact' | '/privacy' | '/sign-in' | '/start' | '/terms'
-  id:
-    | '__root__'
+  fullPaths:
     | '/'
+    | '/admin'
+    | '/learn'
+    | '/teach'
     | '/contact'
+    | '/forgot-password'
     | '/privacy'
+    | '/register'
+    | '/reset-password'
     | '/sign-in'
     | '/start'
     | '/terms'
+    | '/verify-email'
+    | '/admin/analytics'
+    | '/admin/assessments'
+    | '/admin/curriculum'
+    | '/admin/lecturers'
+    | '/admin/lessons'
+    | '/admin/settings'
+    | '/admin/users'
+    | '/learn/assessments'
+    | '/learn/courses'
+    | '/learn/keyboard'
+    | '/learn/notation'
+    | '/learn/paths'
+    | '/learn/practice'
+    | '/learn/progress'
+    | '/teach/assessments'
+    | '/teach/assignments'
+    | '/teach/classes'
+    | '/teach/performance'
+    | '/teach/resources'
+    | '/teach/students'
+    | '/admin/'
+    | '/learn/'
+    | '/teach/'
+    | '/learn/lessons/$lessonSlug'
+  fileRoutesByTo: FileRoutesByTo
+  to:
+    | '/'
+    | '/contact'
+    | '/forgot-password'
+    | '/privacy'
+    | '/register'
+    | '/reset-password'
+    | '/sign-in'
+    | '/start'
+    | '/terms'
+    | '/verify-email'
+    | '/admin/analytics'
+    | '/admin/assessments'
+    | '/admin/curriculum'
+    | '/admin/lecturers'
+    | '/admin/lessons'
+    | '/admin/settings'
+    | '/admin/users'
+    | '/learn/assessments'
+    | '/learn/courses'
+    | '/learn/keyboard'
+    | '/learn/notation'
+    | '/learn/paths'
+    | '/learn/practice'
+    | '/learn/progress'
+    | '/teach/assessments'
+    | '/teach/assignments'
+    | '/teach/classes'
+    | '/teach/performance'
+    | '/teach/resources'
+    | '/teach/students'
+    | '/admin'
+    | '/learn'
+    | '/teach'
+    | '/learn/lessons/$lessonSlug'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/learn'
+    | '/teach'
+    | '/contact'
+    | '/forgot-password'
+    | '/privacy'
+    | '/register'
+    | '/reset-password'
+    | '/sign-in'
+    | '/start'
+    | '/terms'
+    | '/verify-email'
+    | '/admin/analytics'
+    | '/admin/assessments'
+    | '/admin/curriculum'
+    | '/admin/lecturers'
+    | '/admin/lessons'
+    | '/admin/settings'
+    | '/admin/users'
+    | '/learn/assessments'
+    | '/learn/courses'
+    | '/learn/keyboard'
+    | '/learn/notation'
+    | '/learn/paths'
+    | '/learn/practice'
+    | '/learn/progress'
+    | '/teach/assessments'
+    | '/teach/assignments'
+    | '/teach/classes'
+    | '/teach/performance'
+    | '/teach/resources'
+    | '/teach/students'
+    | '/admin/'
+    | '/learn/'
+    | '/teach/'
+    | '/learn/lessons/$lessonSlug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRouteRoute: typeof AdminRouteRouteWithChildren
+  LearnRouteRoute: typeof LearnRouteRouteWithChildren
+  TeachRouteRoute: typeof TeachRouteRouteWithChildren
   ContactRoute: typeof ContactRoute
+  ForgotPasswordRoute: typeof ForgotPasswordRoute
   PrivacyRoute: typeof PrivacyRoute
+  RegisterRoute: typeof RegisterRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   SignInRoute: typeof SignInRoute
   StartRoute: typeof StartRoute
   TermsRoute: typeof TermsRoute
+  VerifyEmailRoute: typeof VerifyEmailRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -105,6 +490,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/contact': {
       id: '/contact'
       path: '/contact'
@@ -112,11 +504,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ContactRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/learn': {
+      id: '/learn'
+      path: '/learn'
+      fullPath: '/learn'
+      preLoaderRoute: typeof LearnRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/privacy': {
       id: '/privacy'
       path: '/privacy'
       fullPath: '/privacy'
       preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/register': {
+      id: '/register'
+      path: '/register'
+      fullPath: '/register'
+      preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sign-in': {
@@ -133,6 +553,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StartRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/teach': {
+      id: '/teach'
+      path: '/teach'
+      fullPath: '/teach'
+      preLoaderRoute: typeof TeachRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/terms': {
       id: '/terms'
       path: '/terms'
@@ -140,16 +567,276 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/verify-email': {
+      id: '/verify-email'
+      path: '/verify-email'
+      fullPath: '/verify-email'
+      preLoaderRoute: typeof VerifyEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/analytics': {
+      id: '/admin/analytics'
+      path: '/analytics'
+      fullPath: '/admin/analytics'
+      preLoaderRoute: typeof AdminAnalyticsRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/assessments': {
+      id: '/admin/assessments'
+      path: '/assessments'
+      fullPath: '/admin/assessments'
+      preLoaderRoute: typeof AdminAssessmentsRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/curriculum': {
+      id: '/admin/curriculum'
+      path: '/curriculum'
+      fullPath: '/admin/curriculum'
+      preLoaderRoute: typeof AdminCurriculumRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/lecturers': {
+      id: '/admin/lecturers'
+      path: '/lecturers'
+      fullPath: '/admin/lecturers'
+      preLoaderRoute: typeof AdminLecturersRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/lessons': {
+      id: '/admin/lessons'
+      path: '/lessons'
+      fullPath: '/admin/lessons'
+      preLoaderRoute: typeof AdminLessonsRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/settings': {
+      id: '/admin/settings'
+      path: '/settings'
+      fullPath: '/admin/settings'
+      preLoaderRoute: typeof AdminSettingsRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/users': {
+      id: '/admin/users'
+      path: '/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AdminUsersRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/learn/': {
+      id: '/learn/'
+      path: '/'
+      fullPath: '/learn/'
+      preLoaderRoute: typeof LearnIndexRouteImport
+      parentRoute: typeof LearnRouteRoute
+    }
+    '/learn/assessments': {
+      id: '/learn/assessments'
+      path: '/assessments'
+      fullPath: '/learn/assessments'
+      preLoaderRoute: typeof LearnAssessmentsRouteImport
+      parentRoute: typeof LearnRouteRoute
+    }
+    '/learn/courses': {
+      id: '/learn/courses'
+      path: '/courses'
+      fullPath: '/learn/courses'
+      preLoaderRoute: typeof LearnCoursesRouteImport
+      parentRoute: typeof LearnRouteRoute
+    }
+    '/learn/keyboard': {
+      id: '/learn/keyboard'
+      path: '/keyboard'
+      fullPath: '/learn/keyboard'
+      preLoaderRoute: typeof LearnKeyboardRouteImport
+      parentRoute: typeof LearnRouteRoute
+    }
+    '/learn/notation': {
+      id: '/learn/notation'
+      path: '/notation'
+      fullPath: '/learn/notation'
+      preLoaderRoute: typeof LearnNotationRouteImport
+      parentRoute: typeof LearnRouteRoute
+    }
+    '/learn/paths': {
+      id: '/learn/paths'
+      path: '/paths'
+      fullPath: '/learn/paths'
+      preLoaderRoute: typeof LearnPathsRouteImport
+      parentRoute: typeof LearnRouteRoute
+    }
+    '/learn/practice': {
+      id: '/learn/practice'
+      path: '/practice'
+      fullPath: '/learn/practice'
+      preLoaderRoute: typeof LearnPracticeRouteImport
+      parentRoute: typeof LearnRouteRoute
+    }
+    '/learn/progress': {
+      id: '/learn/progress'
+      path: '/progress'
+      fullPath: '/learn/progress'
+      preLoaderRoute: typeof LearnProgressRouteImport
+      parentRoute: typeof LearnRouteRoute
+    }
+    '/teach/': {
+      id: '/teach/'
+      path: '/'
+      fullPath: '/teach/'
+      preLoaderRoute: typeof TeachIndexRouteImport
+      parentRoute: typeof TeachRouteRoute
+    }
+    '/teach/assessments': {
+      id: '/teach/assessments'
+      path: '/assessments'
+      fullPath: '/teach/assessments'
+      preLoaderRoute: typeof TeachAssessmentsRouteImport
+      parentRoute: typeof TeachRouteRoute
+    }
+    '/teach/assignments': {
+      id: '/teach/assignments'
+      path: '/assignments'
+      fullPath: '/teach/assignments'
+      preLoaderRoute: typeof TeachAssignmentsRouteImport
+      parentRoute: typeof TeachRouteRoute
+    }
+    '/teach/classes': {
+      id: '/teach/classes'
+      path: '/classes'
+      fullPath: '/teach/classes'
+      preLoaderRoute: typeof TeachClassesRouteImport
+      parentRoute: typeof TeachRouteRoute
+    }
+    '/teach/performance': {
+      id: '/teach/performance'
+      path: '/performance'
+      fullPath: '/teach/performance'
+      preLoaderRoute: typeof TeachPerformanceRouteImport
+      parentRoute: typeof TeachRouteRoute
+    }
+    '/teach/resources': {
+      id: '/teach/resources'
+      path: '/resources'
+      fullPath: '/teach/resources'
+      preLoaderRoute: typeof TeachResourcesRouteImport
+      parentRoute: typeof TeachRouteRoute
+    }
+    '/teach/students': {
+      id: '/teach/students'
+      path: '/students'
+      fullPath: '/teach/students'
+      preLoaderRoute: typeof TeachStudentsRouteImport
+      parentRoute: typeof TeachRouteRoute
+    }
+    '/learn/lessons/$lessonSlug': {
+      id: '/learn/lessons/$lessonSlug'
+      path: '/lessons/$lessonSlug'
+      fullPath: '/learn/lessons/$lessonSlug'
+      preLoaderRoute: typeof LearnLessonsLessonSlugRouteImport
+      parentRoute: typeof LearnRouteRoute
+    }
   }
 }
 
+interface AdminRouteRouteChildren {
+  AdminAnalyticsRoute: typeof AdminAnalyticsRoute
+  AdminAssessmentsRoute: typeof AdminAssessmentsRoute
+  AdminCurriculumRoute: typeof AdminCurriculumRoute
+  AdminLecturersRoute: typeof AdminLecturersRoute
+  AdminLessonsRoute: typeof AdminLessonsRoute
+  AdminSettingsRoute: typeof AdminSettingsRoute
+  AdminUsersRoute: typeof AdminUsersRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+}
+
+const AdminRouteRouteChildren: AdminRouteRouteChildren = {
+  AdminAnalyticsRoute: AdminAnalyticsRoute,
+  AdminAssessmentsRoute: AdminAssessmentsRoute,
+  AdminCurriculumRoute: AdminCurriculumRoute,
+  AdminLecturersRoute: AdminLecturersRoute,
+  AdminLessonsRoute: AdminLessonsRoute,
+  AdminSettingsRoute: AdminSettingsRoute,
+  AdminUsersRoute: AdminUsersRoute,
+  AdminIndexRoute: AdminIndexRoute,
+}
+
+const AdminRouteRouteWithChildren = AdminRouteRoute._addFileChildren(
+  AdminRouteRouteChildren,
+)
+
+interface LearnRouteRouteChildren {
+  LearnAssessmentsRoute: typeof LearnAssessmentsRoute
+  LearnCoursesRoute: typeof LearnCoursesRoute
+  LearnKeyboardRoute: typeof LearnKeyboardRoute
+  LearnNotationRoute: typeof LearnNotationRoute
+  LearnPathsRoute: typeof LearnPathsRoute
+  LearnPracticeRoute: typeof LearnPracticeRoute
+  LearnProgressRoute: typeof LearnProgressRoute
+  LearnIndexRoute: typeof LearnIndexRoute
+  LearnLessonsLessonSlugRoute: typeof LearnLessonsLessonSlugRoute
+}
+
+const LearnRouteRouteChildren: LearnRouteRouteChildren = {
+  LearnAssessmentsRoute: LearnAssessmentsRoute,
+  LearnCoursesRoute: LearnCoursesRoute,
+  LearnKeyboardRoute: LearnKeyboardRoute,
+  LearnNotationRoute: LearnNotationRoute,
+  LearnPathsRoute: LearnPathsRoute,
+  LearnPracticeRoute: LearnPracticeRoute,
+  LearnProgressRoute: LearnProgressRoute,
+  LearnIndexRoute: LearnIndexRoute,
+  LearnLessonsLessonSlugRoute: LearnLessonsLessonSlugRoute,
+}
+
+const LearnRouteRouteWithChildren = LearnRouteRoute._addFileChildren(
+  LearnRouteRouteChildren,
+)
+
+interface TeachRouteRouteChildren {
+  TeachAssessmentsRoute: typeof TeachAssessmentsRoute
+  TeachAssignmentsRoute: typeof TeachAssignmentsRoute
+  TeachClassesRoute: typeof TeachClassesRoute
+  TeachPerformanceRoute: typeof TeachPerformanceRoute
+  TeachResourcesRoute: typeof TeachResourcesRoute
+  TeachStudentsRoute: typeof TeachStudentsRoute
+  TeachIndexRoute: typeof TeachIndexRoute
+}
+
+const TeachRouteRouteChildren: TeachRouteRouteChildren = {
+  TeachAssessmentsRoute: TeachAssessmentsRoute,
+  TeachAssignmentsRoute: TeachAssignmentsRoute,
+  TeachClassesRoute: TeachClassesRoute,
+  TeachPerformanceRoute: TeachPerformanceRoute,
+  TeachResourcesRoute: TeachResourcesRoute,
+  TeachStudentsRoute: TeachStudentsRoute,
+  TeachIndexRoute: TeachIndexRoute,
+}
+
+const TeachRouteRouteWithChildren = TeachRouteRoute._addFileChildren(
+  TeachRouteRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRouteRoute: AdminRouteRouteWithChildren,
+  LearnRouteRoute: LearnRouteRouteWithChildren,
+  TeachRouteRoute: TeachRouteRouteWithChildren,
   ContactRoute: ContactRoute,
+  ForgotPasswordRoute: ForgotPasswordRoute,
   PrivacyRoute: PrivacyRoute,
+  RegisterRoute: RegisterRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   SignInRoute: SignInRoute,
   StartRoute: StartRoute,
   TermsRoute: TermsRoute,
+  VerifyEmailRoute: VerifyEmailRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

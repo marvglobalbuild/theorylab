@@ -6,12 +6,18 @@ import {
   Check,
   CheckCircle2,
   Circle,
+  ExternalLink,
+  GraduationCap,
+  Keyboard as KeyboardIcon,
+  Lightbulb,
   Music2,
   Play,
   RotateCcw,
+  Video,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
+import { Piano } from "@/components/music/Piano";
 import { Staff } from "@/components/music/Staff";
 import { Button } from "@/components/ui/button";
 import { PreviewNotice } from "@/components/workspace/WorkspacePrimitives";
@@ -49,12 +55,32 @@ export function LessonReader({
   const recordedVisitSlugRef = useRef<string | null>(null);
 
   const isCompleted = progress?.status === "completed";
+  const [keyboardActiveNotes, setKeyboardActiveNotes] = useState<Set<string>>(new Set());
+
+  const keyboardHighlightSet = useMemo(() => {
+    return new Set(lesson.keyboardIllustration?.highlightNotes ?? []);
+  }, [lesson.keyboardIllustration]);
+
+  const handleKeyStart = (note: string) => {
+    setKeyboardActiveNotes((prev) => new Set(prev).add(note));
+    piano.noteOn(note);
+  };
+
+  const handleKeyEnd = (note: string) => {
+    setKeyboardActiveNotes((prev) => {
+      const next = new Set(prev);
+      next.delete(note);
+      return next;
+    });
+    piano.noteOff(note);
+  };
 
   useEffect(() => {
     setSelectedAnswers({});
     setCheckedQuestions({});
     setSaveFeedback(null);
     setActiveAudioKey(null);
+    setKeyboardActiveNotes(new Set());
   }, [lesson.slug]);
 
   useEffect(() => {
@@ -176,6 +202,34 @@ export function LessonReader({
           ))}
         </ul>
       </section>
+
+      {/* Important Musical Terminology */}
+      {lesson.terminology && lesson.terminology.length > 0 && (
+        <section
+          aria-labelledby="terminology-heading"
+          className="rounded-[2px] border border-border bg-paper p-6 space-y-3"
+        >
+          <p
+            id="terminology-heading"
+            className="eyebrow inline-flex items-center gap-1.5 text-crimson-deep"
+          >
+            <BookOpen className="size-3.5" aria-hidden /> Important musical terminology
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {lesson.terminology.map((item) => (
+              <div
+                key={item.term}
+                className="rounded-[2px] border border-border bg-background p-3.5 space-y-1"
+              >
+                <span className="font-mono text-xs font-semibold uppercase tracking-wider text-primary">
+                  {item.term}
+                </span>
+                <p className="text-xs leading-relaxed text-muted-foreground">{item.definition}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Progressive Theory Explanations */}
       <div className="space-y-8">
@@ -339,6 +393,83 @@ export function LessonReader({
         </p>
       </section>
 
+      {/* Practical Musicianship Application */}
+      {lesson.practicalApplication && (
+        <section
+          aria-labelledby="practical-heading"
+          className="rounded-[2px] border border-border bg-paper p-6 space-y-3"
+        >
+          <p
+            id="practical-heading"
+            className="eyebrow inline-flex items-center gap-1.5 text-crimson-deep"
+          >
+            <Lightbulb className="size-3.5" aria-hidden /> Practical application
+          </p>
+          <div className="rounded-[2px] border-l-2 border-primary bg-background p-4 text-sm leading-relaxed text-foreground">
+            {lesson.practicalApplication}
+          </div>
+        </section>
+      )}
+
+      {/* Keyboard Illustration */}
+      {lesson.keyboardIllustration && (
+        <section
+          aria-labelledby="keyboard-heading"
+          className="rounded-[2px] border border-border bg-paper p-6 space-y-4"
+        >
+          <div className="flex flex-wrap items-baseline justify-between gap-3 border-b border-border pb-3">
+            <div>
+              <p
+                id="keyboard-heading"
+                className="eyebrow text-crimson-deep inline-flex items-center gap-1.5"
+              >
+                <KeyboardIcon className="size-3.5" aria-hidden /> Keyboard illustration
+              </p>
+              <h2 className="mt-1 font-display text-xl text-foreground">
+                {lesson.keyboardIllustration.label ?? "Keyboard visual reference"}
+              </h2>
+            </div>
+            {lesson.keyboardIllustration.highlightNotes &&
+              lesson.keyboardIllustration.highlightNotes.length > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const steps = (lesson.keyboardIllustration?.highlightNotes ?? []).map(
+                      (note, idx) => ({
+                        notes: [note],
+                        at: idx * 0.45,
+                        duration: 0.4,
+                      }),
+                    );
+                    piano.playPhrase(steps);
+                  }}
+                >
+                  <Play className="size-3.5" aria-hidden /> Hear keyboard notes
+                </Button>
+              )}
+          </div>
+
+          <div className="rounded-[2px] border border-border bg-background p-4">
+            <Piano
+              activeNotes={keyboardActiveNotes}
+              highlightNotes={keyboardHighlightSet}
+              showLabels={lesson.keyboardIllustration.showLabels ?? true}
+              onNoteStart={handleKeyStart}
+              onNoteEnd={handleKeyEnd}
+              className="h-28 md:h-36"
+            />
+          </div>
+
+          {lesson.keyboardIllustration.caption && (
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              {lesson.keyboardIllustration.caption}
+            </p>
+          )}
+        </section>
+      )}
+
       {/* Interactive Practice Activities inside lesson */}
       {lesson.practiceActivities.length > 0 && (
         <section aria-labelledby="practice-heading" className="space-y-4">
@@ -451,6 +582,52 @@ export function LessonReader({
         </section>
       )}
 
+      {/* Video & Multimedia Resource */}
+      {lesson.videoResource && (
+        <section
+          aria-labelledby="video-heading"
+          className="rounded-[2px] border border-border bg-paper p-6 space-y-4"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-1">
+              <p
+                id="video-heading"
+                className="eyebrow text-crimson-deep inline-flex items-center gap-1.5"
+              >
+                <Video className="size-3.5" aria-hidden /> Academic lecture & multimedia
+              </p>
+              <h2 className="font-display text-lg text-foreground">{lesson.videoResource.title}</h2>
+              <p className="text-xs text-muted-foreground">
+                Author / Publisher: {lesson.videoResource.publisher}
+              </p>
+            </div>
+            <Button asChild variant="outline" size="sm">
+              <a href={lesson.videoResource.url} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="size-3.5" aria-hidden /> Open original lecture
+              </a>
+            </Button>
+          </div>
+
+          {lesson.videoResource.embedPermitted && lesson.videoResource.embedUrl && (
+            <div className="aspect-video w-full overflow-hidden rounded-[2px] border border-border bg-background">
+              <iframe
+                src={lesson.videoResource.embedUrl}
+                title={lesson.videoResource.title}
+                className="h-full w-full border-0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+          )}
+
+          {lesson.videoResource.notes && (
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              {lesson.videoResource.notes}
+            </p>
+          )}
+        </section>
+      )}
+
       {/* Summary & Key Takeaways */}
       <section
         aria-labelledby="summary-heading"
@@ -474,6 +651,56 @@ export function LessonReader({
           ))}
         </ul>
       </section>
+
+      {/* Academic References & Verified Sources */}
+      {lesson.references && lesson.references.length > 0 && (
+        <section
+          aria-labelledby="references-heading"
+          className="rounded-[2px] border border-border bg-paper p-6 space-y-4"
+        >
+          <div className="space-y-1 border-b border-border pb-3">
+            <p
+              id="references-heading"
+              className="eyebrow text-crimson-deep inline-flex items-center gap-1.5"
+            >
+              <GraduationCap className="size-3.5" aria-hidden /> Verified academic references
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Publicly accessible educational resources and research citations informing this
+              lesson.
+            </p>
+          </div>
+
+          <ul className="space-y-3">
+            {lesson.references.map((ref) => (
+              <li
+                key={ref.url}
+                className="flex flex-col justify-between gap-2 rounded-[2px] border border-border bg-background p-3.5 text-xs sm:flex-row sm:items-center"
+              >
+                <div className="space-y-0.5">
+                  <div className="font-medium text-foreground">{ref.title}</div>
+                  <div className="text-muted-foreground">{ref.authorOrInstitution}</div>
+                  {ref.relevance && (
+                    <div className="italic text-muted-foreground/80">{ref.relevance}</div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 self-start sm:self-center">
+                  {ref.licence && (
+                    <span className="rounded bg-muted px-2 py-0.5 font-mono text-[0.68rem] text-muted-foreground">
+                      {ref.licence}
+                    </span>
+                  )}
+                  <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                    <a href={ref.url} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="size-3" aria-hidden /> Source
+                    </a>
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* Completion & Sequential Navigation Footer */}
       <footer className="space-y-4 border-t border-border pt-6">

@@ -4,7 +4,20 @@ import { cn } from "@/lib/utils";
 import { displayNote, parseNote, toVexKey } from "@/lib/music/theory";
 
 export type StaffDuration =
-  "16" | "8" | "q" | "h" | "w" | "8d" | "qd" | "hd" | "8r" | "qr" | "hr" | "wr";
+  | "16"
+  | "8"
+  | "q"
+  | "h"
+  | "w"
+  | "16d"
+  | "8d"
+  | "qd"
+  | "hd"
+  | "16r"
+  | "8r"
+  | "qr"
+  | "hr"
+  | "wr";
 
 export type StaffClef = "treble" | "bass" | "alto" | "tenor";
 
