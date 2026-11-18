@@ -39,6 +39,7 @@ import { Route as LearnNotationRouteImport } from './routes/learn/notation'
 import { Route as LearnPathsRouteImport } from './routes/learn/paths'
 import { Route as LearnPracticeRouteImport } from './routes/learn/practice'
 import { Route as LearnProgressRouteImport } from './routes/learn/progress'
+import { Route as LearnRhythmRouteImport } from './routes/learn/rhythm'
 import { Route as TeachIndexRouteImport } from './routes/teach/index'
 import { Route as TeachAssessmentsRouteImport } from './routes/teach/assessments'
 import { Route as TeachAssignmentsRouteImport } from './routes/teach/assignments'
@@ -198,6 +199,11 @@ const LearnProgressRoute = LearnProgressRouteImport.update({
   path: '/progress',
   getParentRoute: () => LearnRouteRoute,
 } as any)
+const LearnRhythmRoute = LearnRhythmRouteImport.update({
+  id: '/rhythm',
+  path: '/rhythm',
+  getParentRoute: () => LearnRouteRoute,
+} as any)
 const TeachIndexRoute = TeachIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -268,6 +274,7 @@ export interface FileRoutesByFullPath {
   '/learn/paths': typeof LearnPathsRoute
   '/learn/practice': typeof LearnPracticeRoute
   '/learn/progress': typeof LearnProgressRoute
+  '/learn/rhythm': typeof LearnRhythmRoute
   '/teach/assessments': typeof TeachAssessmentsRoute
   '/teach/assignments': typeof TeachAssignmentsRoute
   '/teach/classes': typeof TeachClassesRoute
@@ -305,6 +312,7 @@ export interface FileRoutesByTo {
   '/learn/paths': typeof LearnPathsRoute
   '/learn/practice': typeof LearnPracticeRoute
   '/learn/progress': typeof LearnProgressRoute
+  '/learn/rhythm': typeof LearnRhythmRoute
   '/teach/assessments': typeof TeachAssessmentsRoute
   '/teach/assignments': typeof TeachAssignmentsRoute
   '/teach/classes': typeof TeachClassesRoute
@@ -346,6 +354,7 @@ export interface FileRoutesById {
   '/learn/paths': typeof LearnPathsRoute
   '/learn/practice': typeof LearnPracticeRoute
   '/learn/progress': typeof LearnProgressRoute
+  '/learn/rhythm': typeof LearnRhythmRoute
   '/teach/assessments': typeof TeachAssessmentsRoute
   '/teach/assignments': typeof TeachAssignmentsRoute
   '/teach/classes': typeof TeachClassesRoute
@@ -388,6 +397,7 @@ export interface FileRouteTypes {
     | '/learn/paths'
     | '/learn/practice'
     | '/learn/progress'
+    | '/learn/rhythm'
     | '/teach/assessments'
     | '/teach/assignments'
     | '/teach/classes'
@@ -425,6 +435,7 @@ export interface FileRouteTypes {
     | '/learn/paths'
     | '/learn/practice'
     | '/learn/progress'
+    | '/learn/rhythm'
     | '/teach/assessments'
     | '/teach/assignments'
     | '/teach/classes'
@@ -465,6 +476,7 @@ export interface FileRouteTypes {
     | '/learn/paths'
     | '/learn/practice'
     | '/learn/progress'
+    | '/learn/rhythm'
     | '/teach/assessments'
     | '/teach/assignments'
     | '/teach/classes'
@@ -705,6 +717,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LearnProgressRouteImport
       parentRoute: typeof LearnRouteRoute
     }
+    '/learn/rhythm': {
+      id: '/learn/rhythm'
+      path: '/rhythm'
+      fullPath: '/learn/rhythm'
+      preLoaderRoute: typeof LearnRhythmRouteImport
+      parentRoute: typeof LearnRouteRoute
+    }
     '/teach/': {
       id: '/teach/'
       path: '/'
@@ -799,6 +818,7 @@ interface LearnRouteRouteChildren {
   LearnPathsRoute: typeof LearnPathsRoute
   LearnPracticeRoute: typeof LearnPracticeRoute
   LearnProgressRoute: typeof LearnProgressRoute
+  LearnRhythmRoute: typeof LearnRhythmRoute
   LearnIndexRoute: typeof LearnIndexRoute
   LearnLessonsLessonSlugRoute: typeof LearnLessonsLessonSlugRoute
 }
@@ -812,6 +832,7 @@ const LearnRouteRouteChildren: LearnRouteRouteChildren = {
   LearnPathsRoute: LearnPathsRoute,
   LearnPracticeRoute: LearnPracticeRoute,
   LearnProgressRoute: LearnProgressRoute,
+  LearnRhythmRoute: LearnRhythmRoute,
   LearnIndexRoute: LearnIndexRoute,
   LearnLessonsLessonSlugRoute: LearnLessonsLessonSlugRoute,
 }

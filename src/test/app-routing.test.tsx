@@ -37,6 +37,7 @@ describe("App routing", () => {
     "/learn/notation",
     "/learn/keyboard",
     "/learn/harmony",
+    "/learn/rhythm",
     "/learn/assessments",
     "/learn/progress",
     "/teach",

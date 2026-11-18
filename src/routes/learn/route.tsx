@@ -2,6 +2,7 @@ import { createFileRoute, Outlet, useRouterState } from "@tanstack/react-router"
 import {
   BookOpen,
   ClipboardCheck,
+  Clock,
   Compass,
   Layers,
   LayoutDashboard,
@@ -23,6 +24,7 @@ const LEARNER_NAV: WorkspaceNavItem[] = [
   { to: "/learn/notation", label: "Notation Lab", icon: Music },
   { to: "/learn/keyboard", label: "Virtual Keyboard", icon: Piano },
   { to: "/learn/harmony", label: "Harmony Studio", icon: Layers },
+  { to: "/learn/rhythm", label: "Rhythm Lab", icon: Clock },
   { to: "/learn/assessments", label: "Assessments", icon: ClipboardCheck },
   { to: "/learn/progress", label: "Progress", icon: TrendingUp },
 ];
@@ -35,6 +37,7 @@ const TITLES: Record<string, string> = {
   "/learn/notation": "Notation Lab",
   "/learn/keyboard": "Virtual Keyboard",
   "/learn/harmony": "Harmony Studio",
+  "/learn/rhythm": "Rhythm Lab",
   "/learn/assessments": "Assessments",
   "/learn/progress": "Progress",
 };
