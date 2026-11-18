@@ -33,6 +33,7 @@ import { Route as AdminUsersRouteImport } from './routes/admin/users'
 import { Route as LearnIndexRouteImport } from './routes/learn/index'
 import { Route as LearnAssessmentsRouteImport } from './routes/learn/assessments'
 import { Route as LearnCoursesRouteImport } from './routes/learn/courses'
+import { Route as LearnHarmonyRouteImport } from './routes/learn/harmony'
 import { Route as LearnKeyboardRouteImport } from './routes/learn/keyboard'
 import { Route as LearnNotationRouteImport } from './routes/learn/notation'
 import { Route as LearnPathsRouteImport } from './routes/learn/paths'
@@ -167,6 +168,11 @@ const LearnCoursesRoute = LearnCoursesRouteImport.update({
   path: '/courses',
   getParentRoute: () => LearnRouteRoute,
 } as any)
+const LearnHarmonyRoute = LearnHarmonyRouteImport.update({
+  id: '/harmony',
+  path: '/harmony',
+  getParentRoute: () => LearnRouteRoute,
+} as any)
 const LearnKeyboardRoute = LearnKeyboardRouteImport.update({
   id: '/keyboard',
   path: '/keyboard',
@@ -256,6 +262,7 @@ export interface FileRoutesByFullPath {
   '/admin/users': typeof AdminUsersRoute
   '/learn/assessments': typeof LearnAssessmentsRoute
   '/learn/courses': typeof LearnCoursesRoute
+  '/learn/harmony': typeof LearnHarmonyRoute
   '/learn/keyboard': typeof LearnKeyboardRoute
   '/learn/notation': typeof LearnNotationRoute
   '/learn/paths': typeof LearnPathsRoute
@@ -292,6 +299,7 @@ export interface FileRoutesByTo {
   '/admin/users': typeof AdminUsersRoute
   '/learn/assessments': typeof LearnAssessmentsRoute
   '/learn/courses': typeof LearnCoursesRoute
+  '/learn/harmony': typeof LearnHarmonyRoute
   '/learn/keyboard': typeof LearnKeyboardRoute
   '/learn/notation': typeof LearnNotationRoute
   '/learn/paths': typeof LearnPathsRoute
@@ -332,6 +340,7 @@ export interface FileRoutesById {
   '/admin/users': typeof AdminUsersRoute
   '/learn/assessments': typeof LearnAssessmentsRoute
   '/learn/courses': typeof LearnCoursesRoute
+  '/learn/harmony': typeof LearnHarmonyRoute
   '/learn/keyboard': typeof LearnKeyboardRoute
   '/learn/notation': typeof LearnNotationRoute
   '/learn/paths': typeof LearnPathsRoute
@@ -373,6 +382,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/learn/assessments'
     | '/learn/courses'
+    | '/learn/harmony'
     | '/learn/keyboard'
     | '/learn/notation'
     | '/learn/paths'
@@ -409,6 +419,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/learn/assessments'
     | '/learn/courses'
+    | '/learn/harmony'
     | '/learn/keyboard'
     | '/learn/notation'
     | '/learn/paths'
@@ -448,6 +459,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/learn/assessments'
     | '/learn/courses'
+    | '/learn/harmony'
     | '/learn/keyboard'
     | '/learn/notation'
     | '/learn/paths'
@@ -651,6 +663,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LearnCoursesRouteImport
       parentRoute: typeof LearnRouteRoute
     }
+    '/learn/harmony': {
+      id: '/learn/harmony'
+      path: '/harmony'
+      fullPath: '/learn/harmony'
+      preLoaderRoute: typeof LearnHarmonyRouteImport
+      parentRoute: typeof LearnRouteRoute
+    }
     '/learn/keyboard': {
       id: '/learn/keyboard'
       path: '/keyboard'
@@ -774,6 +793,7 @@ const AdminRouteRouteWithChildren = AdminRouteRoute._addFileChildren(
 interface LearnRouteRouteChildren {
   LearnAssessmentsRoute: typeof LearnAssessmentsRoute
   LearnCoursesRoute: typeof LearnCoursesRoute
+  LearnHarmonyRoute: typeof LearnHarmonyRoute
   LearnKeyboardRoute: typeof LearnKeyboardRoute
   LearnNotationRoute: typeof LearnNotationRoute
   LearnPathsRoute: typeof LearnPathsRoute
@@ -786,6 +806,7 @@ interface LearnRouteRouteChildren {
 const LearnRouteRouteChildren: LearnRouteRouteChildren = {
   LearnAssessmentsRoute: LearnAssessmentsRoute,
   LearnCoursesRoute: LearnCoursesRoute,
+  LearnHarmonyRoute: LearnHarmonyRoute,
   LearnKeyboardRoute: LearnKeyboardRoute,
   LearnNotationRoute: LearnNotationRoute,
   LearnPathsRoute: LearnPathsRoute,

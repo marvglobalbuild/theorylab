@@ -3,6 +3,7 @@ import {
   BookOpen,
   ClipboardCheck,
   Compass,
+  Layers,
   LayoutDashboard,
   Music,
   Piano,
@@ -21,6 +22,7 @@ const LEARNER_NAV: WorkspaceNavItem[] = [
   { to: "/learn/practice", label: "Quick Practice", icon: Piano },
   { to: "/learn/notation", label: "Notation Lab", icon: Music },
   { to: "/learn/keyboard", label: "Virtual Keyboard", icon: Piano },
+  { to: "/learn/harmony", label: "Harmony Studio", icon: Layers },
   { to: "/learn/assessments", label: "Assessments", icon: ClipboardCheck },
   { to: "/learn/progress", label: "Progress", icon: TrendingUp },
 ];
@@ -32,6 +34,7 @@ const TITLES: Record<string, string> = {
   "/learn/practice": "Quick Practice",
   "/learn/notation": "Notation Lab",
   "/learn/keyboard": "Virtual Keyboard",
+  "/learn/harmony": "Harmony Studio",
   "/learn/assessments": "Assessments",
   "/learn/progress": "Progress",
 };
