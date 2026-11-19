@@ -7,6 +7,7 @@ export {
   supabaseProfileService as profileService,
 } from "./supabase-auth";
 export { supabaseAcademyService as academyService } from "./supabase-academy";
+export { musicIntelligenceService, createMusicIntelligenceService } from "./music-intelligence";
 export {
   previewProgressService as progressService,
   previewCourseService as courseService,

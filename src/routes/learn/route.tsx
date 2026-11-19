@@ -11,6 +11,7 @@ import {
   Piano,
   Sliders,
   TrendingUp,
+  Wand2,
 } from "lucide-react";
 
 import { ProtectedRoute } from "@/components/workspace/ProtectedRoute";
@@ -20,6 +21,7 @@ import { getRoleDisplayName } from "@/lib/auth-routing";
 
 const LEARNER_NAV: WorkspaceNavItem[] = [
   { to: "/learn", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { to: "/learn/accompaniment", label: "AI Accompaniment Studio", icon: Wand2 },
   { to: "/learn/paths", label: "Learning Paths", icon: Compass },
   { to: "/learn/courses", label: "My Courses", icon: BookOpen },
   { to: "/learn/practice", label: "Quick Practice", icon: Piano },
@@ -35,6 +37,7 @@ const LEARNER_NAV: WorkspaceNavItem[] = [
 
 const TITLES: Record<string, string> = {
   "/learn": "Dashboard",
+  "/learn/accompaniment": "AI Accompaniment Studio",
   "/learn/paths": "Learning Paths",
   "/learn/courses": "My Courses",
   "/learn/practice": "Quick Practice",
