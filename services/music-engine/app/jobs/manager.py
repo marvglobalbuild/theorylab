@@ -12,10 +12,12 @@ from app.core.errors import (
     QueueIntegrationError,
     RateLimitOrQuotaError,
     ResourceNotFoundError,
+    ValidationError,
 )
 from app.core.logging import get_logger
+from app.jobs.assets import AudioAssetRepository
 from app.jobs.queue import InProcessQueueBackend, JobQueueBackend
-from app.jobs.repository import JobRepository
+from app.jobs.repository import JobRepository, _parse_optional_uuid
 from app.processing.pipeline import ProcessingPipeline
 from app.schemas.common import ErrorDetail
 from app.schemas.jobs import (
@@ -48,9 +50,11 @@ class AsyncJobManager:
         storage: StorageAdapter,
         pipeline: ProcessingPipeline,
         queue: JobQueueBackend | None = None,
+        asset_repository: AudioAssetRepository | None = None,
     ) -> None:
         self._settings = settings
         self._repo = repository
+        self._asset_repo = asset_repository
         self._storage = storage
         self._pipeline = pipeline
         if queue is None:
@@ -128,11 +132,46 @@ class AsyncJobManager:
         object_info = await self._storage.head_object(request.source_audio.bucket, normalized_path)
         validate_file_size(object_info.size_bytes, self._settings.music_engine_max_file_size_bytes)
 
+        # 5b. Verify or resolve audio_asset_id against persisted public.audio_assets metadata
+        resolved_asset_id = request.source_audio.asset_id
+        if self._asset_repo is not None:
+            if resolved_asset_id is not None:
+                parsed_asset_id = _parse_optional_uuid(resolved_asset_id)
+                if parsed_asset_id is None:
+                    raise ValidationError(
+                        "source_audio.asset_id must be a valid UUID.",
+                        code="INVALID_AUDIO_ASSET_ID",
+                    )
+                asset_row = await self._asset_repo.get_by_id(parsed_asset_id)
+                if asset_row is None:
+                    raise ResourceNotFoundError(
+                        f"Audio asset '{parsed_asset_id}' was not found.",
+                        code="AUDIO_ASSET_NOT_FOUND",
+                    )
+                if asset_row.user_id != user.id:
+                    raise AccessDeniedError(
+                        "You do not have permission to reference another user's audio asset.",
+                        code="STORAGE_ACCESS_DENIED",
+                    )
+                if asset_row.bucket != request.source_audio.bucket or asset_row.object_path != normalized_path:
+                    raise ValidationError(
+                        "source_audio.asset_id does not match the specified storage bucket and object_path.",
+                        code="AUDIO_ASSET_MISMATCH",
+                    )
+                resolved_asset_id = asset_row.id
+            else:
+                matched_asset = await self._asset_repo.find_by_storage_path(
+                    request.source_audio.bucket, normalized_path
+                )
+                if matched_asset is not None and matched_asset.user_id == user.id:
+                    resolved_asset_id = matched_asset.id
+
         now = datetime.now(timezone.utc)
         job_id = str(uuid.uuid4())
         sanitized_source = request.source_audio.model_copy(
             update={
                 "object_path": normalized_path,
+                "asset_id": resolved_asset_id,
                 "declared_size_bytes": object_info.size_bytes,
             }
         )

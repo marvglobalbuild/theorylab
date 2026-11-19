@@ -3,6 +3,11 @@ from __future__ import annotations
 from app.audio.decoding import FFmpegAudioDecoder
 from app.audio.preservation import DefaultAudioIngestionService
 from app.core.config import Settings
+from app.jobs.assets import (
+    AudioAssetRepository,
+    InMemoryAudioAssetRepository,
+    SupabaseAudioAssetRepository,
+)
 from app.jobs.queue import ArqRedisQueueBackend, InProcessQueueBackend, JobQueueBackend
 from app.jobs.repository import InMemoryJobRepository, JobRepository, SupabaseJobRepository
 from app.processing.accompaniment import AccompanimentOrchestrator
@@ -32,6 +37,12 @@ def build_repository(settings: Settings) -> JobRepository:
     if settings.music_engine_job_repository_backend == "supabase":
         return SupabaseJobRepository(settings)
     return InMemoryJobRepository()
+
+
+def build_asset_repository(settings: Settings) -> AudioAssetRepository:
+    if settings.music_engine_job_repository_backend == "supabase":
+        return SupabaseAudioAssetRepository(settings)
+    return InMemoryAudioAssetRepository(allowed_bucket=settings.supabase_audio_bucket)
 
 
 def build_registry(settings: Settings, storage: StorageAdapter) -> ProcessingEngineRegistry:

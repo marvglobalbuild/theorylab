@@ -579,6 +579,7 @@ export interface PitchExtractionResult {
   voiced_regions: TimeRegion[];
   unvoiced_regions: TimeRegion[];
   note_events: NoteEvent[];
+  note_event_count?: number;
   voiced_frame_count: number;
   total_frame_count: number;
   voiced_ratio: number;
@@ -650,6 +651,8 @@ export interface MixAndExportConfig {
   vocal_balance_mode: VocalBalanceMode;
   stem_gains_db: Record<string, number>;
   stem_pans: Record<string, number>;
+  muted_stems: string[];
+  solo_stems: string[];
   vocal_pan: number;
   accompaniment_pan: number;
   preserve_outro: boolean;

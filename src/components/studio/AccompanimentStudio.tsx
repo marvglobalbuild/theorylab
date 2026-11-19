@@ -28,6 +28,7 @@ import {
   DEFAULT_ARRANGEMENT_CONFIG,
   DEFAULT_MIX_CONFIG,
   STUDIO_CONTEXT_ID,
+  buildAnalysisResultFromAccompaniment,
   extractProjectName,
   generateIdempotencyKey,
   isAccompanimentJobResult,
@@ -39,6 +40,8 @@ export interface AccompanimentStudioProps {
   service?: MusicIntelligenceService;
   /** Polling interval in milliseconds while an async job is queued or processing. */
   pollIntervalMs?: number;
+  /** Maximum consecutive transient polling errors before stopping automatically. */
+  maxPollRetries?: number;
 }
 
 type StudioTab = "workspace" | "history";
@@ -46,6 +49,7 @@ type StudioTab = "workspace" | "history";
 export function AccompanimentStudio({
   service = musicIntelligenceService,
   pollIntervalMs = 1500,
+  maxPollRetries = 4,
 }: AccompanimentStudioProps) {
   const [activeTab, setActiveTab] = useState<StudioTab>("workspace");
 
@@ -91,6 +95,29 @@ export function AccompanimentStudio({
 
   const pollTimerRef = useRef<number | null>(null);
   const submitLockRef = useRef(false);
+  const stopStage1AudioRef = useRef<(() => void) | null>(null);
+  const stopStage5AudioRef = useRef<(() => void) | null>(null);
+
+  const stopAllStudioPlayback = useCallback(() => {
+    stopStage1AudioRef.current?.();
+    stopStage5AudioRef.current?.();
+  }, []);
+
+  const handleRegisterStage1Stop = useCallback((stopFn: () => void) => {
+    stopStage1AudioRef.current = stopFn;
+  }, []);
+
+  const handleRegisterStage5Stop = useCallback((stopFn: () => void) => {
+    stopStage5AudioRef.current = stopFn;
+  }, []);
+
+  const handleStage1BeforePlay = useCallback(() => {
+    stopStage5AudioRef.current?.();
+  }, []);
+
+  const handleStage5BeforePlay = useCallback(() => {
+    stopStage1AudioRef.current?.();
+  }, []);
 
   const clearPollTimer = useCallback(() => {
     if (pollTimerRef.current !== null) {
@@ -102,8 +129,9 @@ export function AccompanimentStudio({
   useEffect(() => {
     return () => {
       clearPollTimer();
+      stopAllStudioPlayback();
     };
-  }, [clearPollTimer]);
+  }, [clearPollTimer, stopAllStudioPlayback]);
 
   const loadHistory = useCallback(async () => {
     if (!service.isConfigured()) return;
@@ -181,45 +209,114 @@ export function AccompanimentStudio({
     }
   }, []);
 
-  // Poll active queued / processing job until terminal state
+  const activeJobId = activeJob?.job_id ?? null;
+  const isJobRunning = activeJob?.status === "queued" || activeJob?.status === "processing";
+
+  // Poll active queued / processing job until terminal state with bounded transient retries
   useEffect(() => {
     clearPollTimer();
-    if (!activeJob) return;
-    if (activeJob.status !== "queued" && activeJob.status !== "processing") return;
+    if (!activeJobId || !isJobRunning) return;
 
     let cancelled = false;
+    let inFlight = false;
+    let consecutiveErrors = 0;
+    let hadTransientError = false;
 
-    const schedulePoll = () => {
+    const schedulePoll = (delayMs: number) => {
+      clearPollTimer();
+      if (cancelled) return;
       pollTimerRef.current = window.setTimeout(async () => {
-        const res = await service.getJob(activeJob.job_id);
-        if (cancelled) return;
-        if (res.status === "ok") {
-          applyJobSnapshot(res.data);
-          if (
-            res.data.status === "completed" ||
-            res.data.status === "failed" ||
-            res.data.status === "cancelled"
-          ) {
-            void loadHistory();
+        if (cancelled || inFlight) return;
+        inFlight = true;
+        try {
+          const res = await service.getJob(activeJobId);
+          if (cancelled) return;
+
+          if (res.status === "ok") {
+            consecutiveErrors = 0;
+            if (hadTransientError) {
+              hadTransientError = false;
+              setStudioError(null);
+            }
+            applyJobSnapshot(res.data);
+            if (
+              res.data.status === "completed" ||
+              res.data.status === "failed" ||
+              res.data.status === "cancelled"
+            ) {
+              void loadHistory();
+              return;
+            }
+            schedulePoll(pollIntervalMs);
+            return;
           }
-        } else if (res.status === "error") {
-          setStudioError(
-            res.httpStatus === 401
-              ? "Your session expired while monitoring the processing job. Sign in again to resume."
-              : res.message,
-          );
+
+          if (res.status === "error") {
+            if (res.httpStatus === 401) {
+              setStudioError(
+                "Your session expired while monitoring the processing job. Sign in again to resume.",
+              );
+              return;
+            }
+            if (res.httpStatus === 403) {
+              setStudioError(`Access denied while monitoring the processing job: ${res.message}`);
+              return;
+            }
+
+            const isTransient =
+              res.retryable ||
+              res.httpStatus == null ||
+              res.httpStatus >= 500 ||
+              res.httpStatus === 429 ||
+              res.httpStatus === 408;
+
+            if (!isTransient) {
+              setStudioError(res.message);
+              return;
+            }
+
+            consecutiveErrors += 1;
+            if (consecutiveErrors <= maxPollRetries) {
+              hadTransientError = true;
+              setStudioError(
+                `Temporary connection issue while checking job progress (retrying ${consecutiveErrors}/${maxPollRetries})…`,
+              );
+              const backoffMs = Math.min(
+                pollIntervalMs * 2 ** (consecutiveErrors - 1),
+                pollIntervalMs * 8,
+              );
+              schedulePoll(backoffMs);
+              return;
+            }
+
+            setStudioError(
+              `Unable to refresh job status after ${maxPollRetries} retries: ${res.message}. Refresh Project History to inspect the latest server status.`,
+            );
+            return;
+          }
+
+          setStudioError(res.message);
+        } finally {
+          inFlight = false;
         }
-      }, pollIntervalMs);
+      }, delayMs);
     };
 
-    schedulePoll();
+    schedulePoll(pollIntervalMs);
     return () => {
       cancelled = true;
       clearPollTimer();
     };
-  }, [activeJob, pollIntervalMs, service, applyJobSnapshot, loadHistory, clearPollTimer]);
-
-  const isJobRunning = activeJob?.status === "queued" || activeJob?.status === "processing";
+  }, [
+    activeJobId,
+    isJobRunning,
+    pollIntervalMs,
+    maxPollRetries,
+    service,
+    applyJobSnapshot,
+    loadHistory,
+    clearPollTimer,
+  ]);
 
   const analysisCapabilityReady = useMemo(() => {
     if (!capabilities) return true;
@@ -247,6 +344,7 @@ export function AccompanimentStudio({
   }, [capabilities]);
 
   const handleSelectFile = (file: File | null, validationError?: string | null) => {
+    stopAllStudioPlayback();
     setSelectedFile(file);
     setUploadedSource(null);
     setVerifiedMetadata(null);
@@ -300,6 +398,7 @@ export function AccompanimentStudio({
     extraParameters?: Record<string, unknown>,
   ) => {
     if (submitLockRef.current || isJobRunning) return;
+    stopAllStudioPlayback();
     submitLockRef.current = true;
     setSubmittingJob(true);
     setStudioError(null);
@@ -391,10 +490,89 @@ export function AccompanimentStudio({
     }
   };
 
+  const restoreConfigFromJobParameters = (params: Record<string, unknown> | undefined) => {
+    const rawArr = params?.["arrangement"];
+    if (rawArr && typeof rawArr === "object") {
+      setArrangementConfig({
+        ...DEFAULT_ARRANGEMENT_CONFIG,
+        ...(rawArr as Partial<ArrangementConfig>),
+      });
+    } else {
+      setArrangementConfig(DEFAULT_ARRANGEMENT_CONFIG);
+    }
+
+    const rawMix = params?.["mix"];
+    if (rawMix && typeof rawMix === "object") {
+      setMixConfig({
+        ...DEFAULT_MIX_CONFIG,
+        ...(rawMix as Partial<MixAndExportConfig>),
+      });
+    } else {
+      setMixConfig(DEFAULT_MIX_CONFIG);
+    }
+  };
+
+  const restoreAnalysisForJob = useCallback(
+    (job: MusicProcessingJob) => {
+      if (
+        job.status === "completed" &&
+        job.job_type === "audio_analysis" &&
+        job.result &&
+        isAnalysisJobResult(job.result)
+      ) {
+        setAnalysisResult(job.result);
+        return;
+      }
+
+      // Prefer a completed sibling audio_analysis job for the exact same source audio
+      const siblingAnalysis = historyJobs.find(
+        (candidate) =>
+          candidate.job_type === "audio_analysis" &&
+          candidate.status === "completed" &&
+          candidate.result &&
+          isAnalysisJobResult(candidate.result) &&
+          (candidate.source_audio.object_path === job.source_audio.object_path ||
+            (Boolean(job.source_audio.asset_id) &&
+              candidate.source_audio.asset_id === job.source_audio.asset_id)),
+      );
+      if (siblingAnalysis && isAnalysisJobResult(siblingAnalysis.result)) {
+        setAnalysisResult(siblingAnalysis.result);
+        return;
+      }
+
+      // Otherwise restore an honest summary from the completed accompaniment/render payload
+      if (
+        job.status === "completed" &&
+        (job.job_type === "accompaniment_generation" || job.job_type === "audio_rendering") &&
+        job.result &&
+        isAccompanimentJobResult(job.result)
+      ) {
+        setAnalysisResult(buildAnalysisResultFromAccompaniment(job, job.result));
+        return;
+      }
+
+      setAnalysisResult(null);
+    },
+    [historyJobs],
+  );
+
   const handleRetryJob = async (failedJob: MusicProcessingJob) => {
     if (submitLockRef.current) return;
+    stopAllStudioPlayback();
+    clearPollTimer();
+    setActiveTab("workspace");
     setRetryingJob(true);
     setStudioError(null);
+    setUploadError(null);
+    setProjectName(extractProjectName(failedJob));
+    setSelectedFile(null);
+    setUploadedSource(failedJob.source_audio);
+    setVerifiedMetadata(failedJob.audio_metadata);
+    setAccompanimentJob(null);
+    setAccompanimentResult(null);
+    restoreAnalysisForJob(failedJob);
+    restoreConfigFromJobParameters(failedJob.parameters);
+
     try {
       const supportedType =
         failedJob.job_type === "audio_analysis" ||
@@ -410,32 +588,29 @@ export function AccompanimentStudio({
   };
 
   const handleReopenHistoryJob = (job: MusicProcessingJob) => {
+    stopAllStudioPlayback();
+    clearPollTimer();
     setActiveTab("workspace");
     setStudioError(null);
-    setProjectName(extractProjectName(job));
+    setUploadError(null);
+    setUploadProgress(0);
     setSelectedFile(null);
+    setAnalysisResult(null);
+    setAccompanimentJob(null);
+    setAccompanimentResult(null);
+    setArrangementConfig(DEFAULT_ARRANGEMENT_CONFIG);
+    setMixConfig(DEFAULT_MIX_CONFIG);
+
+    setProjectName(extractProjectName(job));
     setUploadedSource(job.source_audio);
     setVerifiedMetadata(job.audio_metadata);
     applyJobSnapshot(job);
-
-    // Restore arrangement & mix params if stored on the job
-    const rawArr = job.parameters?.["arrangement"];
-    if (rawArr && typeof rawArr === "object") {
-      setArrangementConfig((prev) => ({
-        ...prev,
-        ...(rawArr as Partial<ArrangementConfig>),
-      }));
-    }
-    const rawMix = job.parameters?.["mix"];
-    if (rawMix && typeof rawMix === "object") {
-      setMixConfig((prev) => ({
-        ...prev,
-        ...(rawMix as Partial<MixAndExportConfig>),
-      }));
-    }
+    restoreAnalysisForJob(job);
+    restoreConfigFromJobParameters(job.parameters);
   };
 
   const handleNewProject = () => {
+    stopAllStudioPlayback();
     clearPollTimer();
     setActiveTab("workspace");
     setProjectName("");
@@ -454,11 +629,18 @@ export function AccompanimentStudio({
   };
 
   const handleSyncStemControlsToMix = useCallback(
-    (gainsDb: Record<string, number>, pans: Record<string, number>) => {
+    (
+      gainsDb: Record<string, number>,
+      pans: Record<string, number>,
+      mutedStems: string[] = [],
+      soloStems: string[] = [],
+    ) => {
       setMixConfig((prev) => ({
         ...prev,
         stem_gains_db: gainsDb,
         stem_pans: pans,
+        muted_stems: mutedStems,
+        solo_stems: soloStems,
       }));
     },
     [],
@@ -482,7 +664,12 @@ export function AccompanimentStudio({
             <FilterTabs<StudioTab>
               label="Studio views"
               value={activeTab}
-              onChange={setActiveTab}
+              onChange={(nextTab) => {
+                if (nextTab !== activeTab) {
+                  stopAllStudioPlayback();
+                }
+                setActiveTab(nextTab);
+              }}
               options={[
                 { id: "workspace", label: "Studio Workspace" },
                 { id: "history", label: `Project History (${historyJobs.length})` },
@@ -588,6 +775,8 @@ export function AccompanimentStudio({
             locked={Boolean(isJobRunning || engineUnavailableMsg)}
             onSelectFile={handleSelectFile}
             onUploadAndAnalyse={handleUploadAndAnalyse}
+            onBeforePlay={handleStage1BeforePlay}
+            registerStopPlayback={handleRegisterStage1Stop}
           />
 
           {/* Stage B: Musical Analysis & Vocal Pitch Review */}
@@ -616,6 +805,8 @@ export function AccompanimentStudio({
             service={service}
             localVocalFile={selectedFile}
             onSyncStemControlsToMix={handleSyncStemControlsToMix}
+            onBeforePlay={handleStage5BeforePlay}
+            registerStopPlayback={handleRegisterStage5Stop}
           />
 
           {/* Stage F: Mixing, Mastering & Format Controls */}
@@ -643,7 +834,10 @@ export function AccompanimentStudio({
             <span>All uploaded vocals and mastered exports remain private to your account.</span>
             <button
               type="button"
-              onClick={() => setActiveTab("history")}
+              onClick={() => {
+                stopAllStudioPlayback();
+                setActiveTab("history");
+              }}
               className="link-draw inline-flex items-center gap-1.5 font-medium text-primary"
             >
               <History className="size-3.5" aria-hidden /> View saved project history (

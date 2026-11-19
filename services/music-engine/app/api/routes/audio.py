@@ -2,14 +2,22 @@ from __future__ import annotations
 
 import re
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, UploadFile, status
 
-from app.api.dependencies import get_app_settings, get_current_user, get_storage_adapter
+from app.api.dependencies import (
+    get_app_settings,
+    get_asset_repository,
+    get_current_user,
+    get_storage_adapter,
+)
 from app.audio.preservation import cleanup_workspace, compute_sha256, validate_uploaded_bytes_metadata
 from app.audio.validation import probe_audio_stream
 from app.core.config import Settings
+from app.core.logging import get_logger
+from app.jobs.assets import AudioAssetRecord, AudioAssetRepository
 from app.schemas.audio import (
     AudioFormat,
     AudioSourceRef,
@@ -20,6 +28,9 @@ from app.security.auth import AuthenticatedUser
 from app.storage.base import StorageAdapter, UserStoragePathGuard
 
 router = APIRouter(prefix="/api/v1/audio", tags=["Audio"])
+logger = get_logger("audio")
+
+_MAX_SAFE_FILENAME_LEN = 180
 
 
 def _sanitize_upload_filename(filename: str | None, detected_format: str) -> str:
@@ -29,7 +40,11 @@ def _sanitize_upload_filename(filename: str | None, detected_format: str) -> str
     if not cleaned:
         return f"recording.{detected_format}"
     if "." not in cleaned:
-        return f"{cleaned}.{detected_format}"
+        cleaned = f"{cleaned}.{detected_format}"
+    if len(cleaned) > _MAX_SAFE_FILENAME_LEN:
+        suffix = Path(cleaned).suffix[:16] or f".{detected_format}"
+        stem = cleaned[: max(1, _MAX_SAFE_FILENAME_LEN - len(suffix))].rstrip(".") or "recording"
+        cleaned = f"{stem}{suffix}"
     return cleaned
 
 
@@ -83,6 +98,7 @@ async def upload_private_audio(
     current_user: AuthenticatedUser = Depends(get_current_user),
     settings: Settings = Depends(get_app_settings),
     storage: StorageAdapter = Depends(get_storage_adapter),
+    asset_repo: AudioAssetRepository = Depends(get_asset_repository),
 ) -> AudioValidationResponse:
     raw_bytes = await file.read(settings.music_engine_max_file_size_bytes + 1)
     detected_format_str, size_bytes = validate_uploaded_bytes_metadata(
@@ -125,6 +141,41 @@ async def upload_private_audio(
             content_type=metadata.mime_type,
         )
 
+        now = datetime.now(timezone.utc)
+        asset_record = AudioAssetRecord(
+            id=asset_id,
+            user_id=current_user.id,
+            bucket=bucket,
+            object_path=stored.object_path,
+            original_filename=safe_filename,
+            mime_type=metadata.mime_type,
+            size_bytes=stored.size_bytes,
+            duration_ms=metadata.duration_ms,
+            detected_format=metadata.detected_format.value,
+            sha256_checksum=metadata.sha256_checksum,
+            sample_rate_hz=metadata.sample_rate_hz,
+            channels=metadata.channels,
+            codec_name=metadata.codec_name,
+            bit_rate_bps=metadata.bit_rate_bps,
+            bit_depth=metadata.bit_depth,
+            original_preserved=True,
+            verified_at=now,
+            created_at=now,
+            updated_at=now,
+        )
+        try:
+            persisted_asset = await asset_repo.create_or_get(asset_record)
+        except Exception:
+            logger.warning(
+                "Uploaded audio bytes to private storage but failed to persist public.audio_assets row",
+                extra={
+                    "user_id": current_user.id,
+                    "asset_id": asset_id,
+                    "object_path": stored.object_path,
+                },
+            )
+            raise
+
         backend_type = (
             StorageBackendType.SUPABASE
             if settings.music_engine_storage_backend == "supabase"
@@ -132,12 +183,12 @@ async def upload_private_audio(
         )
         asset_ref = AudioSourceRef(
             storage_backend=backend_type,
-            bucket=bucket,
-            object_path=stored.object_path,
-            asset_id=asset_id,
-            original_filename=safe_filename,
-            declared_mime_type=metadata.mime_type,
-            declared_size_bytes=stored.size_bytes,
+            bucket=persisted_asset.bucket,
+            object_path=persisted_asset.object_path,
+            asset_id=persisted_asset.id,
+            original_filename=persisted_asset.original_filename,
+            declared_mime_type=persisted_asset.mime_type,
+            declared_size_bytes=persisted_asset.size_bytes,
         )
         return AudioValidationResponse(
             valid=True,

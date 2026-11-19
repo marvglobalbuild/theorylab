@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import Depends, Header, Request
 
 from app.core.config import Settings
+from app.jobs.assets import AudioAssetRepository
 from app.jobs.manager import AsyncJobManager
 from app.processing.registry import ProcessingEngineRegistry
 from app.security.auth import AuthenticatedUser, SupabaseAuthVerifier
@@ -23,6 +24,10 @@ def get_processing_registry(request: Request) -> ProcessingEngineRegistry:
 
 def get_storage_adapter(request: Request) -> StorageAdapter:
     return request.app.state.storage
+
+
+def get_asset_repository(request: Request) -> AudioAssetRepository:
+    return request.app.state.asset_repository
 
 
 def get_auth_verifier(request: Request) -> SupabaseAuthVerifier:

@@ -15,12 +15,14 @@ from app.core.config import Settings, get_settings
 from app.core.errors import MusicEngineError
 from app.core.logging import configure_logging, get_logger
 from app.core.runtime import (
+    build_asset_repository,
     build_pipeline,
     build_queue_backend,
     build_registry,
     build_repository,
     build_storage,
 )
+from app.jobs.assets import AudioAssetRepository
 from app.jobs.manager import AsyncJobManager
 from app.jobs.queue import JobQueueBackend
 from app.jobs.repository import JobRepository
@@ -36,6 +38,7 @@ def create_app(
     settings: Settings | None = None,
     storage: StorageAdapter | None = None,
     repository: JobRepository | None = None,
+    asset_repository: AudioAssetRepository | None = None,
     auth_verifier: SupabaseAuthVerifier | None = None,
     registry: ProcessingEngineRegistry | None = None,
     queue: JobQueueBackend | None = None,
@@ -45,6 +48,7 @@ def create_app(
 
     resolved_storage = storage or build_storage(resolved_settings)
     resolved_repo = repository or build_repository(resolved_settings)
+    resolved_asset_repo = asset_repository or build_asset_repository(resolved_settings)
     resolved_auth = auth_verifier or SupabaseAuthVerifier(resolved_settings)
     resolved_registry = registry or build_registry(resolved_settings, resolved_storage)
     pipeline = build_pipeline(resolved_settings, resolved_registry)
@@ -56,6 +60,7 @@ def create_app(
         storage=resolved_storage,
         pipeline=pipeline,
         queue=resolved_queue,
+        asset_repository=resolved_asset_repo,
     )
 
     @asynccontextmanager
@@ -96,6 +101,7 @@ def create_app(
     app.state.settings = resolved_settings
     app.state.storage = resolved_storage
     app.state.repository = resolved_repo
+    app.state.asset_repository = resolved_asset_repo
     app.state.auth_verifier = resolved_auth
     app.state.registry = resolved_registry
     app.state.queue = resolved_queue
@@ -108,6 +114,7 @@ def create_app(
         allow_credentials=True,
         allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+        expose_headers=["Content-Disposition", "X-Request-ID"],
     )
 
     @app.middleware("http")

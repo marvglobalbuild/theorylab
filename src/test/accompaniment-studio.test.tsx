@@ -288,7 +288,7 @@ const SAMPLE_MASTERED_RESULT: AccompanimentJobResult = {
     target_lufs: -14.0,
     true_peak_ceiling_dbtp: -1.0,
     max_limiting_db: 3.5,
-    true_peak_method: "4x_oversampled_polyphase_itu_bs1770",
+    true_peak_method: "4x_oversampled_polyphase_estimate",
     loudness_method: "pyloudnorm_itu_bs1770_4",
     input_metrics: {
       integrated_lufs: -18.4,
@@ -299,7 +299,7 @@ const SAMPLE_MASTERED_RESULT: AccompanimentJobResult = {
       rms_dbfs: -19.0,
       crest_factor_db: 13.8,
       is_silent: false,
-      true_peak_method: "4x_oversampled_polyphase_itu_bs1770",
+      true_peak_method: "4x_oversampled_polyphase_estimate",
     },
     output_metrics: {
       integrated_lufs: -14.1,
@@ -310,7 +310,7 @@ const SAMPLE_MASTERED_RESULT: AccompanimentJobResult = {
       rms_dbfs: -15.2,
       crest_factor_db: 14.0,
       is_silent: false,
-      true_peak_method: "4x_oversampled_polyphase_itu_bs1770",
+      true_peak_method: "4x_oversampled_polyphase_estimate",
     },
     applied_gain_db: 4.3,
     limiting_applied: true,
@@ -727,5 +727,445 @@ describe("AI Accompaniment and Arrangement Studio — Core Workflow, Mastering, 
     expect(
       screen.getByText(/Music Intelligence Engine backend not configured/i),
     ).toBeInTheDocument();
+  });
+
+  it("P1: restores Stage 02 analysis on completed reopen, clears stale Stage 05/06/07 outputs when opening a failed job, and returns to workspace on history retry", async () => {
+    const completedRender = makeCompletedMasterJob();
+    const siblingAnalysis: MusicProcessingJob = {
+      ...completedRender,
+      job_id: "job-analysis-sibling",
+      job_type: "audio_analysis",
+      status: "completed",
+      artifacts: [],
+      result: SAMPLE_ANALYSIS_RESULT as unknown as Record<string, unknown>,
+    };
+    const failedJob: MusicProcessingJob = {
+      ...completedRender,
+      job_id: "job-failed-1",
+      job_type: "audio_rendering",
+      status: "failed",
+      progress_percent: 40,
+      stage: "failed",
+      source_audio: {
+        storage_backend: "local",
+        bucket: "sonora-audio",
+        object_path: "user-1/uploads/u2/other_take.wav",
+        original_filename: "other_take.wav",
+      },
+      parameters: { project_name: "Failed Vocal Take" },
+      artifacts: [],
+      result: null,
+      error: { code: "SYNTH_ERROR", message: "Synth timed out", retryable: true },
+    };
+    const retriedQueuedJob: MusicProcessingJob = {
+      ...failedJob,
+      job_id: "job-retried-1",
+      status: "queued",
+      progress_percent: 0,
+      stage: "queued",
+      error: null,
+    };
+
+    const service = createMockService({
+      listJobs: vi.fn().mockResolvedValue({
+        status: "ok",
+        data: [completedRender, siblingAnalysis, failedJob],
+      }),
+      createJob: vi.fn().mockResolvedValue({ status: "ok", data: retriedQueuedJob }),
+      getJob: vi.fn().mockResolvedValue({ status: "ok", data: retriedQueuedJob }),
+    });
+
+    render(<AccompanimentStudio service={service} pollIntervalMs={5000} />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: /Project History \(3\)/i })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("tab", { name: /Project History \(3\)/i }));
+
+    // Reopen completed render -> restores Stage 02 detected metrics AND Stage 06 mastering report
+    const reopenButtons = screen.getAllByRole("button", { name: /^Reopen$/i });
+    fireEvent.click(reopenButtons[0]!);
+
+    await waitFor(() => {
+      expect(screen.getByText("-14.1 LUFS")).toBeInTheDocument();
+      expect(screen.getByText("92.5 BPM")).toBeInTheDocument();
+      expect(screen.getByText("C4 – D5")).toBeInTheDocument();
+    });
+
+    // Switch back to history and reopen failed job -> stale Stage 05/06/07 mastering report & exports must clear
+    // (job 0 now shows "Opened", so remaining "Reopen" buttons are [0]=siblingAnalysis, [1]=failedJob)
+    fireEvent.click(screen.getByRole("tab", { name: /Project History \(3\)/i }));
+    const reopenButtonsAgain = screen.getAllByRole("button", { name: /^Reopen$/i });
+    fireEvent.click(reopenButtonsAgain[1]!);
+
+    await waitFor(() => {
+      expect(screen.queryByText("-14.1 LUFS")).not.toBeInTheDocument();
+      expect(screen.queryByText("Mastered Mix (WAV)")).not.toBeInTheDocument();
+    });
+
+    // Switch to history and click Retry job on failed job -> must switch back to Studio Workspace tab and submit retry
+    fireEvent.click(screen.getByRole("tab", { name: /Project History \(3\)/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Retry job/i }));
+
+    await waitFor(() => {
+      expect(service.createJob).toHaveBeenCalledWith(
+        expect.objectContaining({
+          job_type: "audio_rendering",
+          source_audio: expect.objectContaining({
+            object_path: "user-1/uploads/u2/other_take.wav",
+          }),
+          parameters: expect.objectContaining({
+            project_name: "Failed Vocal Take",
+          }),
+        }),
+      );
+      expect(screen.getByRole("tab", { name: /Studio Workspace/i })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+    });
+  });
+
+  it("P1: restores Stage 02 summary fallback from completed render when no sibling analysis job exists and enforces single active transport", async () => {
+    const completedRender = makeCompletedMasterJob();
+    const stopSpy = vi.fn();
+    const startSpy = vi.fn();
+    const pauseSpy = vi.fn();
+
+    const pcm = new Float32Array(4410);
+    const decodedBuf = {
+      length: pcm.length,
+      numberOfChannels: 1,
+      sampleRate: 44100,
+      duration: 0.1,
+      getChannelData: () => pcm,
+    } as unknown as AudioBuffer;
+
+    class MockAudioCtx {
+      state = "running";
+      currentTime = 0;
+      destination = {};
+      resume = vi.fn().mockResolvedValue(undefined);
+      close = vi.fn().mockResolvedValue(undefined);
+      decodeAudioData = vi.fn().mockResolvedValue(decodedBuf);
+      createGain = vi.fn(() => ({ gain: { value: 1, setValueAtTime: vi.fn() }, connect: vi.fn() }));
+      createStereoPanner = vi.fn(() => ({
+        pan: { value: 0, setValueAtTime: vi.fn() },
+        connect: vi.fn(),
+      }));
+      createBufferSource = vi.fn(() => ({
+        buffer: null,
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+        start: startSpy,
+        stop: stopSpy,
+        onended: null,
+      }));
+    }
+    vi.stubGlobal("AudioContext", MockAudioCtx);
+    vi.stubGlobal(
+      "requestAnimationFrame",
+      vi.fn(() => 1),
+    );
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+
+    const blob = new Blob([new Uint8Array([1, 2, 3, 4])], { type: "audio/wav" });
+    Object.defineProperty(blob, "arrayBuffer", {
+      value: () => Promise.resolve(new ArrayBuffer(16)),
+    });
+
+    const service = createMockService({
+      listJobs: vi.fn().mockResolvedValue({ status: "ok", data: [completedRender] }),
+      downloadArtifactBlob: vi.fn().mockResolvedValue({
+        status: "ok",
+        data: {
+          blob,
+          filename: "master.wav",
+          mimeType: "audio/wav",
+          objectPath: "user-1/jobs/job-render-1/master.wav",
+        },
+      }),
+    });
+
+    const { container } = render(<AccompanimentStudio service={service} />);
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: /Project History \(1\)/i })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("tab", { name: /Project History \(1\)/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Reopen$/i }));
+
+    // Stage 02 fallback restored from completed render summary (20 note events, 92.5 BPM, G major)
+    await waitFor(() => {
+      expect(screen.getByText("92.5 BPM")).toBeInTheDocument();
+      expect(screen.getByText(/20 note events/i)).toBeInTheDocument();
+    });
+
+    // Attach a local vocal file so Stage 01 HTML <audio> element renders alongside Stage 05 preview deck
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const localFile = new File(["RIFFwav"], "grace_vocal.wav", { type: "audio/wav" });
+    Object.defineProperty(localFile, "arrayBuffer", {
+      value: () => Promise.resolve(new ArrayBuffer(16)),
+    });
+    fireEvent.change(fileInput, {
+      target: { files: [localFile] },
+    });
+
+    const audioEl = container.querySelector("audio") as HTMLAudioElement;
+    expect(audioEl).toBeTruthy();
+    Object.defineProperty(audioEl, "paused", { value: false, configurable: true });
+    audioEl.pause = pauseSpy;
+
+    // Starting Stage 05 Web Audio must pause Stage 01 <audio>
+    fireEvent.click(screen.getByRole("button", { name: /Start playback/i }));
+    await waitFor(() => {
+      expect(startSpy).toHaveBeenCalledTimes(1);
+    });
+    expect(pauseSpy).toHaveBeenCalledTimes(1);
+
+    // Playing Stage 01 <audio> must stop Stage 05 Web Audio
+    fireEvent.play(audioEl);
+    expect(stopSpy).toHaveBeenCalled();
+  });
+
+  it("P2: aligns Stage 06 peak ceiling unit label and transmits true muted_stems and solo_stems to backend mix config", async () => {
+    const completedRender = makeCompletedMasterJob();
+    const queuedRender: MusicProcessingJob = {
+      ...completedRender,
+      job_id: "job-render-2",
+      status: "queued",
+      progress_percent: 0,
+      stage: "queued",
+      result: null,
+      artifacts: [],
+    };
+    const service = createMockService({
+      listJobs: vi.fn().mockResolvedValue({ status: "ok", data: [completedRender] }),
+      createJob: vi.fn().mockResolvedValue({ status: "ok", data: queuedRender }),
+      getJob: vi.fn().mockResolvedValue({ status: "ok", data: queuedRender }),
+    });
+
+    render(<AccompanimentStudio service={service} pollIntervalMs={5000} />);
+
+    // Stage 06 ceiling unit uses honest dB (4× est.) label rather than dBTP
+    expect(screen.getByText(/4× peak ceiling target/i)).toBeInTheDocument();
+    expect(screen.getByText(/-1\.0 dB \(4× est\.\)/i)).toBeInTheDocument();
+    expect(screen.queryByText(/dBTP/i)).not.toBeInTheDocument();
+
+    // Reopen completed render to expose Stage 05 stem controls
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: /Project History \(1\)/i })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("tab", { name: /Project History \(1\)/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Reopen$/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /Mute Acoustic Grand Piano/i }),
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Mute Acoustic Grand Piano/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Solo String Ensemble/i }));
+
+    // Stage 06 reflects [M] and [S] indicators and sends true muted_stems/solo_stems in createJob
+    expect(screen.getByText("[M]")).toBeInTheDocument();
+    expect(screen.getByText("[S]")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Generate & master full mix/i }));
+    await waitFor(() => {
+      expect(service.createJob).toHaveBeenCalledWith(
+        expect.objectContaining({
+          job_type: "audio_rendering",
+          parameters: expect.objectContaining({
+            mix: expect.objectContaining({
+              muted_stems: ["piano"],
+              solo_stems: ["strings"],
+              stem_gains_db: expect.objectContaining({ piano: 0 }),
+            }),
+          }),
+        }),
+      );
+    });
+  });
+
+  it("P3: retries transient polling errors with bounded backoff and recovers cleanly when a subsequent poll succeeds", async () => {
+    const queuedJob: MusicProcessingJob = {
+      ...makeCompletedMasterJob(),
+      job_id: "job-poll-recover",
+      job_type: "audio_analysis",
+      status: "queued",
+      progress_percent: 0,
+      stage: "queued",
+      result: null,
+      artifacts: [],
+    };
+    const completedJob: MusicProcessingJob = {
+      ...queuedJob,
+      status: "completed",
+      progress_percent: 100,
+      stage: "completed",
+      result: SAMPLE_ANALYSIS_RESULT as unknown as Record<string, unknown>,
+    };
+
+    const getJobMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: "error",
+        code: "SERVICE_UNAVAILABLE",
+        message: "Temporary upstream 503",
+        httpStatus: 503,
+        retryable: true,
+      })
+      .mockResolvedValueOnce({
+        status: "error",
+        code: "NETWORK_ERROR",
+        message: "Connection reset",
+        httpStatus: undefined,
+        retryable: true,
+      })
+      .mockResolvedValueOnce({ status: "ok", data: completedJob });
+
+    const service = createMockService({
+      createJob: vi.fn().mockResolvedValue({ status: "ok", data: queuedJob }),
+      getJob: getJobMock,
+    });
+
+    const { container } = render(
+      <AccompanimentStudio service={service} pollIntervalMs={5} maxPollRetries={3} />,
+    );
+    await waitFor(() => expect(service.getCapabilities).toHaveBeenCalled());
+
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, {
+      target: { files: [new File(["RIFFwav"], "take.wav", { type: "audio/wav" })] },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Upload & analyse vocal/i }));
+
+    await waitFor(
+      () => {
+        expect(getJobMock).toHaveBeenCalledTimes(3);
+        expect(screen.getByText("92.5 BPM")).toBeInTheDocument();
+      },
+      { timeout: 2000 },
+    );
+
+    // Transient error banner clears automatically on recovery
+    expect(screen.queryByText(/Temporary connection issue/i)).not.toBeInTheDocument();
+  });
+
+  it("P3: halts bounded polling after maxPollRetries without infinite retries and stops immediately on 401/403", async () => {
+    const queuedJobA: MusicProcessingJob = {
+      ...makeCompletedMasterJob(),
+      job_id: "job-poll-exhaust",
+      job_type: "audio_analysis",
+      status: "queued",
+      progress_percent: 0,
+      stage: "queued",
+      result: null,
+      artifacts: [],
+    };
+    const persistent503 = vi.fn().mockResolvedValue({
+      status: "error",
+      code: "GATEWAY_TIMEOUT",
+      message: "Backend overloaded",
+      httpStatus: 503,
+      retryable: true,
+    });
+
+    const serviceExhaust = createMockService({
+      createJob: vi.fn().mockResolvedValue({ status: "ok", data: queuedJobA }),
+      getJob: persistent503,
+    });
+
+    const { container, unmount } = render(
+      <AccompanimentStudio service={serviceExhaust} pollIntervalMs={5} maxPollRetries={2} />,
+    );
+    await waitFor(() => expect(serviceExhaust.getCapabilities).toHaveBeenCalled());
+
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, {
+      target: { files: [new File(["RIFFwav"], "take.wav", { type: "audio/wav" })] },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Upload & analyse vocal/i }));
+
+    await waitFor(
+      () => {
+        expect(screen.getByRole("alert")).toHaveTextContent(
+          /Unable to refresh job status after 2 retries/i,
+        );
+      },
+      { timeout: 2000 },
+    );
+    // Initial failed attempt + 2 retries = 3 total calls, then stops
+    const countAfterHalt = persistent503.mock.calls.length;
+    expect(countAfterHalt).toBe(3);
+    await new Promise((r) => setTimeout(r, 60));
+    expect(persistent503).toHaveBeenCalledTimes(3);
+    unmount();
+
+    // Now verify 401 stops immediately on the very first poll failure (0 retries)
+    const getJob401 = vi.fn().mockResolvedValue({
+      status: "error",
+      code: "TOKEN_EXPIRED",
+      message: "JWT expired",
+      httpStatus: 401,
+      retryable: false,
+    });
+    const service401 = createMockService({
+      createJob: vi.fn().mockResolvedValue({
+        status: "ok",
+        data: { ...queuedJobA, job_id: "job-poll-401" },
+      }),
+      getJob: getJob401,
+    });
+
+    const render401 = render(
+      <AccompanimentStudio service={service401} pollIntervalMs={5} maxPollRetries={3} />,
+    );
+    await waitFor(() => expect(service401.getCapabilities).toHaveBeenCalled());
+    const input401 = render401.container.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input401, {
+      target: { files: [new File(["RIFFwav"], "take.wav", { type: "audio/wav" })] },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Upload & analyse vocal/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(/session expired while monitoring/i);
+    });
+    await new Promise((r) => setTimeout(r, 40));
+    expect(getJob401).toHaveBeenCalledTimes(1);
+    render401.unmount();
+
+    // And verify 403 stops immediately on the very first poll failure (0 retries)
+    const getJob403 = vi.fn().mockResolvedValue({
+      status: "error",
+      code: "JOB_ACCESS_DENIED",
+      message: "Forbidden",
+      httpStatus: 403,
+      retryable: false,
+    });
+    const service403 = createMockService({
+      createJob: vi.fn().mockResolvedValue({
+        status: "ok",
+        data: { ...queuedJobA, job_id: "job-poll-403" },
+      }),
+      getJob: getJob403,
+    });
+
+    const render403 = render(
+      <AccompanimentStudio service={service403} pollIntervalMs={5} maxPollRetries={3} />,
+    );
+    await waitFor(() => expect(service403.getCapabilities).toHaveBeenCalled());
+    const input403 = render403.container.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input403, {
+      target: { files: [new File(["RIFFwav"], "take.wav", { type: "audio/wav" })] },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Upload & analyse vocal/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(/Access denied while monitoring/i);
+    });
+    await new Promise((r) => setTimeout(r, 40));
+    expect(getJob403).toHaveBeenCalledTimes(1);
   });
 });

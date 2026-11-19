@@ -276,3 +276,90 @@ def test_loudness_safeguard_refuses_excessive_limiting_and_reports_honestly() ->
     assert report.output_metrics.integrated_lufs is not None
     assert report.output_metrics.integrated_lufs < -15.5
     assert any("could not be reached" in w or "limiting safeguard" in w for w in report.warnings)
+
+
+def test_true_peak_method_label_is_honest_estimate_and_mute_solo_stems_are_silenced(
+    test_settings: Settings,
+    tmp_path: Path,
+) -> None:
+    # P2 metadata accuracy: label reflects 4x oversampled polyphase estimate, not certified BS.1770
+    assert TRUE_PEAK_METHOD_LABEL == "4x_oversampled_polyphase_estimate"
+
+    # Silent vocal so master audio contains only active accompaniment stems for clean spectral isolation
+    silent_vocal = tmp_path / "silent_vocal.wav"
+    sf.write(str(silent_vocal), np.zeros((44100 * 2, 1), dtype=np.float32), 44100, subtype="PCM_16")
+    fallback_acc = _write_tone_wav(tmp_path / "acc.wav", freq_hz=150.0, duration_sec=2.0, amplitude=0.25, channels=2)
+
+    # Distinct stem frequencies: piano = 330 Hz, strings = 660 Hz, bass = 110 Hz
+    piano_stem = _write_tone_wav(tmp_path / "piano.wav", freq_hz=330.0, duration_sec=2.0, amplitude=0.25, channels=2)
+    strings_stem = _write_tone_wav(tmp_path / "strings.wav", freq_hz=660.0, duration_sec=2.0, amplitude=0.25, channels=2)
+    bass_stem = _write_tone_wav(tmp_path / "bass.wav", freq_hz=110.0, duration_sec=2.0, amplitude=0.25, channels=2)
+
+    def _band_energy(wav_path: str, low_hz: float, high_hz: float) -> float:
+        data, sr = sf.read(wav_path, dtype="float64", always_2d=True)
+        mono = data[:, 0]
+        freqs = np.fft.rfftfreq(len(mono), 1.0 / sr)
+        mags = np.abs(np.fft.rfft(mono))
+        return float(np.max(mags[(freqs >= low_hz) & (freqs <= high_hz)]))
+
+    mixer = SonoraAudioMixerAndMaster(test_settings)
+
+    # 1) Mute piano: piano must be omitted (zero energy, TrackMixSummary.muted=True), strings & bass audible
+    muted_res = asyncio.run(
+        mixer.mix_vocal_and_accompaniment(
+            vocal_path=silent_vocal,
+            accompaniment_path=fallback_acc,
+            stem_paths={"piano": piano_stem, "strings": strings_stem, "bass": bass_stem},
+            output_dir=tmp_path / "out_muted",
+            config=MixAndExportConfig(
+                output_formats=[AudioFormat.WAV],
+                vocal_balance_mode="manual",
+                vocal_gain_db=0.0,
+                accompaniment_gain_db=0.0,
+                muted_stems=["piano"],
+            ),
+        )
+    )
+    assert muted_res.used_individual_stems is True
+    assert muted_res.mastering.true_peak_method == "4x_oversampled_polyphase_estimate"
+    tracks_by_id = {t.track_id: t for t in muted_res.tracks_mixed}
+    assert tracks_by_id["stem:piano"].muted is True
+    assert tracks_by_id["stem:strings"].muted is False
+    assert tracks_by_id["stem:bass"].muted is False
+
+    muted_wav = muted_res.exports[0].output_path
+    piano_e = _band_energy(muted_wav, 320, 340)
+    strings_e = _band_energy(muted_wav, 650, 670)
+    bass_e = _band_energy(muted_wav, 100, 120)
+    assert strings_e > piano_e * 1000.0
+    assert bass_e > piano_e * 1000.0
+
+    # 2) Solo strings: only strings audible; piano & bass must be silenced (muted=True)
+    solo_res = asyncio.run(
+        mixer.mix_vocal_and_accompaniment(
+            vocal_path=silent_vocal,
+            accompaniment_path=fallback_acc,
+            stem_paths={"piano": piano_stem, "strings": strings_stem, "bass": bass_stem},
+            output_dir=tmp_path / "out_solo",
+            config=MixAndExportConfig(
+                output_formats=[AudioFormat.WAV],
+                vocal_balance_mode="manual",
+                vocal_gain_db=0.0,
+                accompaniment_gain_db=0.0,
+                solo_stems=["strings"],
+            ),
+        )
+    )
+    assert solo_res.used_individual_stems is True
+    solo_tracks = {t.track_id: t for t in solo_res.tracks_mixed}
+    assert solo_tracks["stem:strings"].muted is False
+    assert solo_tracks["stem:piano"].muted is True
+    assert solo_tracks["stem:bass"].muted is True
+
+    solo_wav = solo_res.exports[0].output_path
+    solo_strings_e = _band_energy(solo_wav, 650, 670)
+    solo_piano_e = _band_energy(solo_wav, 320, 340)
+    solo_bass_e = _band_energy(solo_wav, 100, 120)
+    assert solo_strings_e > solo_piano_e * 1000.0
+    assert solo_strings_e > solo_bass_e * 1000.0
+

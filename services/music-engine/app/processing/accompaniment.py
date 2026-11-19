@@ -263,7 +263,15 @@ class AccompanimentOrchestrator:
         # Stage 6b: Render per-instrument stems when requested OR when stem-level mixing overrides are specified
         need_stems = bool(
             config.render_individual_stems
-            or (mix_config is not None and (mix_config.stem_gains_db or mix_config.stem_pans))
+            or (
+                mix_config is not None
+                and (
+                    mix_config.stem_gains_db
+                    or mix_config.stem_pans
+                    or mix_config.muted_stems
+                    or mix_config.solo_stems
+                )
+            )
         )
         stem_summaries: list[dict[str, Any]] = []
         stem_local_paths: dict[str, Path] = {}

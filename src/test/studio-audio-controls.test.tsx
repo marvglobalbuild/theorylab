@@ -4,7 +4,10 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AudioPreviewDeck } from "@/components/studio/AudioPreviewDeck";
-import { computeRealWaveformPeaks } from "@/components/studio/studio-types";
+import {
+  computeRealWaveformPeaks,
+  mapTimeBetweenPreviewModes,
+} from "@/components/studio/studio-types";
 import type {
   AccompanimentJobResult,
   MusicIntelligenceService,
@@ -238,8 +241,9 @@ describe("Studio Audio Preview, Real Waveform Computation, Stem Controls & Unmou
     expect(peaksA[3]).toBeCloseTo(1.0, 2);
   });
 
-  it("handles A/B comparison toggle, per-stem Mute/Solo/Volume/Pan sync, and full AudioContext cleanup on unmount", async () => {
+  it("handles A/B comparison toggle, per-stem Mute/Solo/Volume/Pan sync, onBeforePlay, and full AudioContext cleanup on unmount", async () => {
     const syncSpy = vi.fn();
+    const beforePlaySpy = vi.fn();
     const blob = new Blob([new Uint8Array([1, 2, 3, 4])], { type: "audio/wav" });
     Object.defineProperty(blob, "arrayBuffer", {
       value: () => Promise.resolve(new ArrayBuffer(16)),
@@ -264,6 +268,7 @@ describe("Studio Audio Preview, Real Waveform Computation, Stem Controls & Unmou
         result={MOCK_RESULT}
         service={mockService}
         onSyncStemControlsToMix={syncSpy}
+        onBeforePlay={beforePlaySpy}
       />,
     );
 
@@ -275,7 +280,7 @@ describe("Studio Audio Preview, Real Waveform Computation, Stem Controls & Unmou
     fireEvent.click(abBtn);
     expect(abBtn).toHaveTextContent(/Original Vocal \(A\)/i);
 
-    // Per-stem Mute, Solo, Volume, and Pan update aria state & sync to mix config
+    // Per-stem Mute, Solo, Volume, and Pan update aria state & sync true gains + muted/solo arrays
     const mutePiano = screen.getByRole("button", { name: /Mute Acoustic Grand Piano/i });
     expect(mutePiano).toHaveAttribute("aria-pressed", "false");
     fireEvent.click(mutePiano);
@@ -288,18 +293,199 @@ describe("Studio Audio Preview, Real Waveform Computation, Stem Controls & Unmou
     const panPiano = screen.getByLabelText("Pan", { selector: "#stem-pan-piano" });
     fireEvent.change(panPiano, { target: { value: "-0.5" } });
     expect(syncSpy).toHaveBeenLastCalledWith(
-      expect.objectContaining({ piano: -24 }),
+      expect.objectContaining({ piano: 0 }),
       expect.objectContaining({ piano: -0.5 }),
+      ["piano"],
+      ["strings"],
     );
 
-    // Start playback -> verifies AudioBufferSourceNode starts, then unmount stops & closes AudioContext
+    // Start playback -> verifies onBeforePlay + AudioBufferSourceNode start, then unmount stops & closes AudioContext
+    fireEvent.click(screen.getByRole("button", { name: /Start playback/i }));
+    await waitFor(() => {
+      expect(startSpy).toHaveBeenCalledTimes(1);
+    });
+    expect(beforePlaySpy).toHaveBeenCalledTimes(1);
+
+    unmount();
+    expect(stopSpy).toHaveBeenCalled();
+    expect(closeSpy).toHaveBeenCalled();
+  });
+
+  it("P2: aligns A/B comparison timestamps and stems_mixer duration using intro_offset_ms", async () => {
+    // Pure helper checks
+    expect(mapTimeBetweenPreviewModes(5.0, "final_mix", "original_vocal", 2500)).toBeCloseTo(
+      2.5,
+      4,
+    );
+    expect(mapTimeBetweenPreviewModes(1.0, "final_mix", "original_vocal", 2500)).toBe(0);
+    expect(mapTimeBetweenPreviewModes(2.5, "original_vocal", "final_mix", 2500)).toBeCloseTo(
+      5.0,
+      4,
+    );
+    expect(mapTimeBetweenPreviewModes(4.0, "final_mix", "accompaniment", 2500)).toBe(4.0);
+
+    // Full deck check with intro_offset_ms = 2500 and vocal duration 10s (so intro + vocal = 12.5s > 10s synth)
+    const offsetResult: AccompanimentJobResult = {
+      ...MOCK_RESULT,
+      mixing: {
+        sample_rate_hz: 44100,
+        channels: 2,
+        mix_duration_ms: 12500,
+        vocal_duration_ms: 10000,
+        accompaniment_duration_ms: 10000,
+        intro_offset_ms: 2500,
+        vocal_balance_mode: "auto_adaptive",
+        adaptive_accompaniment_trim_db: 0,
+        effective_vocal_gain_db: 0,
+        effective_accompaniment_gain_db: -6,
+        used_individual_stems: true,
+        pre_master_sample_peak_dbfs: -3,
+        pre_master_true_peak_dbtp: -2.8,
+        pre_master_clipping_risk: false,
+        original_vocal_preserved: true,
+        vocal_timing_and_pitch_unmodified: true,
+        original_vocal_copy_object_path: null,
+        tracks_mixed: [],
+        warnings: [],
+      },
+    };
+
+    const blob = new Blob([new Uint8Array([1, 2, 3, 4])], { type: "audio/wav" });
+    Object.defineProperty(blob, "arrayBuffer", {
+      value: () => Promise.resolve(new ArrayBuffer(16)),
+    });
+
+    // Override AudioContext with 12.5s buffer so seek + A/B shift is clearly observable
+    const longBuf = createFakeAudioBuffer(new Float32Array(44100 * 13), 44100);
+    class LongMockAudioContext {
+      state = "running";
+      currentTime = 0;
+      destination = {};
+      resume = vi.fn().mockResolvedValue(undefined);
+      close = closeSpy;
+      decodeAudioData = vi.fn().mockResolvedValue(longBuf);
+      createGain = vi.fn(() => ({ gain: { value: 1, setValueAtTime: vi.fn() }, connect: vi.fn() }));
+      createStereoPanner = vi.fn(() => ({
+        pan: { value: 0, setValueAtTime: vi.fn() },
+        connect: vi.fn(),
+      }));
+      createBufferSource = vi.fn(() => ({
+        buffer: null,
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+        start: startSpy,
+        stop: stopSpy,
+        onended: null,
+      }));
+    }
+    vi.stubGlobal("AudioContext", LongMockAudioContext);
+
+    const mockService = {
+      isConfigured: vi.fn().mockReturnValue(true),
+      downloadArtifactBlob: vi.fn().mockResolvedValue({
+        status: "ok",
+        data: {
+          blob,
+          filename: "audio.wav",
+          mimeType: "audio/wav",
+          objectPath: "user-1/jobs/j1/master.wav",
+        },
+      }),
+    } as unknown as MusicIntelligenceService;
+
+    render(<AudioPreviewDeck job={MOCK_JOB} result={offsetResult} service={mockService} />);
+
+    // Seek to 5.0s on Final Mix via keyboard ArrowRight on waveform slider and start playback
+    const scrubber = screen.getByRole("slider", { name: /Decoded waveform for final mix/i });
+    fireEvent.keyDown(scrubber, { key: "ArrowRight" });
+    fireEvent.click(screen.getByRole("button", { name: /Start playback/i }));
+    await waitFor(() => {
+      expect(startSpy).toHaveBeenLastCalledWith(expect.any(Number), 5);
+    });
+
+    // Toggle A/B to Original Vocal -> must subtract 2.5s intro offset and start at 2.5s
+    const abBtn = screen.getByRole("button", {
+      name: /Toggle A\/B comparison between Original Vocal and Final Mix/i,
+    });
+    fireEvent.click(abBtn);
+    await waitFor(() => {
+      expect(startSpy).toHaveBeenLastCalledWith(expect.any(Number), 2.5);
+    });
+
+    // Switch to Stem Mixer tab -> duration must reflect intro_offset (2.5s) + decoded vocal (13s) = 15.5s (0:15)
+    fireEvent.click(screen.getByRole("tab", { name: /Stem Mixer/i }));
+    expect(screen.getByText(/0:15/)).toBeInTheDocument();
+  });
+
+  it("P1: hydrates stem volume/pan/mute/solo from job.parameters.mix and stops playback on job switch", async () => {
+    const hydratedJob: MusicProcessingJob = {
+      ...MOCK_JOB,
+      job_id: "j-hydrated",
+      parameters: {
+        mix: {
+          stem_gains_db: { piano: -6.0, strings: 0.0 },
+          stem_pans: { piano: -0.4, strings: 0.5 },
+          muted_stems: ["piano"],
+          solo_stems: ["strings"],
+        },
+      },
+    };
+    const nextJob: MusicProcessingJob = {
+      ...MOCK_JOB,
+      job_id: "j-next",
+      parameters: {},
+    };
+
+    const blob = new Blob([new Uint8Array([1, 2, 3, 4])], { type: "audio/wav" });
+    Object.defineProperty(blob, "arrayBuffer", {
+      value: () => Promise.resolve(new ArrayBuffer(16)),
+    });
+    const mockService = {
+      isConfigured: vi.fn().mockReturnValue(true),
+      downloadArtifactBlob: vi.fn().mockResolvedValue({
+        status: "ok",
+        data: {
+          blob,
+          filename: "master.wav",
+          mimeType: "audio/wav",
+          objectPath: "user-1/jobs/j-hydrated/master.wav",
+        },
+      }),
+    } as unknown as MusicIntelligenceService;
+
+    const { rerender } = render(
+      <AudioPreviewDeck job={hydratedJob} result={MOCK_RESULT} service={mockService} />,
+    );
+
+    // Stem controls hydrated from job.parameters.mix
+    expect(screen.getByRole("button", { name: /Mute Acoustic Grand Piano/i })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: /Solo String Ensemble/i })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    const panPiano = screen.getByLabelText("Pan", {
+      selector: "#stem-pan-piano",
+    }) as HTMLInputElement;
+    expect(Number(panPiano.value)).toBeCloseTo(-0.4, 2);
+
+    // Start playback on j-hydrated, then switch job prop to j-next -> must stop playback immediately & reset stems
     fireEvent.click(screen.getByRole("button", { name: /Start playback/i }));
     await waitFor(() => {
       expect(startSpy).toHaveBeenCalledTimes(1);
     });
 
-    unmount();
+    rerender(<AudioPreviewDeck job={nextJob} result={MOCK_RESULT} service={mockService} />);
     expect(stopSpy).toHaveBeenCalled();
-    expect(closeSpy).toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /Mute Acoustic Grand Piano/i })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(screen.getByRole("button", { name: /Solo String Ensemble/i })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
   });
 });

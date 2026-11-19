@@ -129,6 +129,8 @@ export const DEFAULT_MIX_CONFIG: MixAndExportConfig = {
   vocal_balance_mode: "auto_adaptive",
   stem_gains_db: {},
   stem_pans: {},
+  muted_stems: [],
+  solo_stems: [],
   vocal_pan: 0.0,
   accompaniment_pan: 0.0,
   preserve_outro: true,
@@ -262,4 +264,115 @@ export function computeRealWaveformPeaks(buffer: AudioBuffer, barCount: number =
 
   const globalMax = Math.max(...peaks, 0.001);
   return peaks.map((p) => Math.max(0.03, Math.min(1, p / globalMax)));
+}
+
+export function dbToGainRatio(db: number): number {
+  if (!Number.isFinite(db)) return 1.0;
+  const ratio = Math.pow(10, db / 20);
+  return Math.max(0, Math.min(1.5, Number(ratio.toFixed(2))));
+}
+
+/**
+ * Translates a playback timestamp between the arrangement/mix timeline (where the vocal
+ * starts at `introOffsetMs`) and the isolated original vocal timeline (where the vocal
+ * starts at 0 ms). Keeps A/B comparison phrase-aligned when `intro_bars > 0`.
+ */
+export function mapTimeBetweenPreviewModes(
+  timeSec: number,
+  fromMode: "final_mix" | "original_vocal" | "accompaniment" | "stems_mixer",
+  toMode: "final_mix" | "original_vocal" | "accompaniment" | "stems_mixer",
+  introOffsetMs: number,
+): number {
+  const safeTime = Number.isFinite(timeSec) && timeSec > 0 ? timeSec : 0;
+  const offsetSec = Number.isFinite(introOffsetMs) && introOffsetMs > 0 ? introOffsetMs / 1000 : 0;
+  if (offsetSec === 0 || fromMode === toMode) return safeTime;
+
+  const fromIsVocalOnly = fromMode === "original_vocal";
+  const toIsVocalOnly = toMode === "original_vocal";
+  if (fromIsVocalOnly === toIsVocalOnly) return safeTime;
+
+  if (toIsVocalOnly) {
+    return Math.max(0, Number((safeTime - offsetSec).toFixed(3)));
+  }
+  return Number((safeTime + offsetSec).toFixed(3));
+}
+
+/**
+ * Builds an honest Stage 02 analysis profile from the condensed `musical_analysis`
+ * and `vocal_pitch` summary embedded inside a completed accompaniment/render job
+ * when no sibling `audio_analysis` job is present in history.
+ */
+export function buildAnalysisResultFromAccompaniment(
+  job: MusicProcessingJob,
+  result: AccompanimentJobResult,
+): AudioAnalysisResult {
+  const ma = result.musical_analysis;
+  const vp = result.vocal_pitch;
+  const durationMs =
+    result.mixing?.vocal_duration_ms ??
+    job.audio_metadata?.duration_ms ??
+    result.arrangement.duration_ms;
+  const sampleRateHz =
+    job.audio_metadata?.sample_rate_hz ?? result.synthesis.sample_rate_hz ?? 44100;
+
+  const validStability =
+    ma.tempo_stability === "steady" ||
+    ma.tempo_stability === "moderate_variation" ||
+    ma.tempo_stability === "rubato_or_uncertain" ||
+    ma.tempo_stability === "unavailable"
+      ? ma.tempo_stability
+      : "unavailable";
+
+  const validReliability =
+    ma.reliability === "high" ||
+    ma.reliability === "medium" ||
+    ma.reliability === "low" ||
+    ma.reliability === "unreliable"
+      ? ma.reliability
+      : "medium";
+
+  return {
+    tempo_bpm: ma.tempo_bpm,
+    tempo_confidence: ma.tempo_confidence,
+    tempo_stability: validStability,
+    time_signature: ma.time_signature ?? result.arrangement.time_signature ?? "4/4",
+    estimated_key: ma.estimated_key ?? result.arrangement.key,
+    key_root: result.arrangement.key_root ?? null,
+    scale: result.arrangement.scale ?? null,
+    key_confidence: ma.key_confidence,
+    tuning_offset_cents: null,
+    beats: [],
+    chords: [],
+    chroma_summary: null,
+    audio_duration_ms: durationMs,
+    sample_rate_hz: sampleRateHz,
+    reliability: validReliability,
+    reliability_score: ma.reliability_score,
+    analysis_method: "restored_from_render_summary",
+    is_heuristic: true,
+    instrument_tags: [],
+    warnings: ma.warnings ?? [],
+    vocal_pitch: vp
+      ? {
+          mode: vp.mode === "polyphonic" ? "polyphonic" : "monophonic",
+          hop_ms: 0,
+          contours: [],
+          voiced_regions: [],
+          unvoiced_regions: [],
+          note_events: [],
+          note_event_count: vp.note_event_count,
+          voiced_frame_count: 0,
+          total_frame_count: 0,
+          voiced_ratio: vp.voiced_ratio,
+          mean_confidence: vp.mean_confidence,
+          pitch_range_midi: vp.pitch_range_midi,
+          audio_duration_ms: durationMs,
+          sample_rate_hz: sampleRateHz,
+          extractor_method: "librosa_pyin_monophonic",
+          monophonic_only_notice:
+            "Summary restored from saved render job; re-run Stage 01 analysis to inspect full beat markers and chord timeline.",
+          warnings: vp.warnings ?? [],
+        }
+      : null,
+  };
 }

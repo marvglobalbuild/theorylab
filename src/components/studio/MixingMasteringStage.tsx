@@ -184,10 +184,22 @@ export function MixingMasteringStage({
                 {selectedInstruments.map((instId) => {
                   const gain = config.stem_gains_db[instId] ?? 0;
                   const pan = config.stem_pans[instId] ?? 0;
+                  const isMuted = config.muted_stems?.includes(instId) ?? false;
+                  const isSolo = config.solo_stems?.includes(instId) ?? false;
                   return (
                     <div key={instId} className="grid grid-cols-12 items-center gap-2 text-xs">
                       <span className="col-span-3 truncate font-medium capitalize text-foreground">
                         {instId.replace(/_/g, " ")}
+                        {isMuted && (
+                          <span className="ml-1 font-mono text-[10px] uppercase text-crimson-deep">
+                            [M]
+                          </span>
+                        )}
+                        {!isMuted && isSolo && (
+                          <span className="ml-1 font-mono text-[10px] uppercase text-primary">
+                            [S]
+                          </span>
+                        )}
                       </span>
                       <div className="col-span-5 flex items-center gap-1.5">
                         <input
@@ -261,10 +273,10 @@ export function MixingMasteringStage({
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-xs">
                 <label htmlFor="master-tp-ceiling" className="font-medium text-foreground">
-                  Peak ceiling target
+                  4× peak ceiling target
                 </label>
                 <span className="font-mono tabular-nums text-foreground">
-                  {config.true_peak_ceiling_dbtp.toFixed(1)} dBTP
+                  {config.true_peak_ceiling_dbtp.toFixed(1)} dB (4× est.)
                 </span>
               </div>
               <input

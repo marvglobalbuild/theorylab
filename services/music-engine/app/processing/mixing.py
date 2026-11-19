@@ -50,6 +50,8 @@ class MixAndExportConfig(BaseModel):
     vocal_balance_mode: Literal["auto_adaptive", "manual"] = "auto_adaptive"
     stem_gains_db: dict[str, float] = Field(default_factory=dict)
     stem_pans: dict[str, float] = Field(default_factory=dict)
+    muted_stems: list[str] = Field(default_factory=list)
+    solo_stems: list[str] = Field(default_factory=list)
     vocal_pan: float = Field(default=0.0, ge=-1.0, le=1.0)
     accompaniment_pan: float = Field(default=0.0, ge=-1.0, le=1.0)
     intro_offset_ms: int = Field(default=0, ge=0, le=60000)
@@ -338,23 +340,29 @@ class SonoraAudioMixerAndMaster(MixingAndRenderingInterface):
         vocal_duration_ms = int(round((vocal_stereo.shape[0] / float(sr)) * 1000.0))
 
         # 2. Build accompaniment bus either from individual stems (when stem overrides provided) or full accompaniment WAV
-        use_stems = bool(stem_paths and (cfg.stem_gains_db or cfg.stem_pans))
+        muted_set = {s.strip() for s in cfg.muted_stems if s and s.strip()}
+        solo_set = {s.strip() for s in cfg.solo_stems if s and s.strip()}
+        use_stems = bool(
+            stem_paths and (cfg.stem_gains_db or cfg.stem_pans or muted_set or solo_set)
+        )
         if use_stems and stem_paths:
-            loaded_stems: list[tuple[str, np.ndarray, int, int, bool, float, float]] = []
+            loaded_stems: list[tuple[str, np.ndarray, int, int, bool, float, float, bool]] = []
             max_stem_len = 0
             for inst_id, s_path in stem_paths.items():
                 s_audio, s_sr, s_ch, s_res = _load_audio_as_stereo_float64(s_path, sr)
                 s_gain_db = float(cfg.stem_gains_db.get(inst_id, 0.0))
                 s_pan = float(cfg.stem_pans.get(inst_id, 0.0))
-                loaded_stems.append((inst_id, s_audio, s_sr, s_ch, s_res, s_gain_db, s_pan))
+                is_muted = (inst_id in muted_set) or (bool(solo_set) and inst_id not in solo_set)
+                loaded_stems.append((inst_id, s_audio, s_sr, s_ch, s_res, s_gain_db, s_pan, is_muted))
                 if s_audio.shape[0] > max_stem_len:
                     max_stem_len = s_audio.shape[0]
 
             accomp_bus = np.zeros((max_stem_len, 2), dtype=np.float64)
-            for inst_id, s_audio, s_sr, s_ch, s_res, s_gain_db, s_pan in loaded_stems:
+            for inst_id, s_audio, s_sr, s_ch, s_res, s_gain_db, s_pan, is_muted in loaded_stems:
                 s_metrics = measure_loudness(s_audio, sr)
-                panned = _apply_constant_power_pan(s_audio, s_pan) * db_to_linear(s_gain_db)
-                accomp_bus[: panned.shape[0], :] += panned
+                if not is_muted:
+                    panned = _apply_constant_power_pan(s_audio, s_pan) * db_to_linear(s_gain_db)
+                    accomp_bus[: panned.shape[0], :] += panned
                 tracks_mixed.append(
                     TrackMixSummary(
                         track_id=f"stem:{inst_id}",
@@ -366,6 +374,7 @@ class SonoraAudioMixerAndMaster(MixingAndRenderingInterface):
                         offset_ms=0,
                         applied_gain_db=round(s_gain_db, 3),
                         pan=round(s_pan, 3),
+                        muted=is_muted,
                         input_lufs=s_metrics.integrated_lufs,
                     )
                 )

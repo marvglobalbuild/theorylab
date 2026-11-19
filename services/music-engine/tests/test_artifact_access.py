@@ -131,3 +131,15 @@ def test_owner_can_access_job_artifacts_and_cross_user_is_denied(
     )
     assert unrelated.status_code == 404
     assert unrelated.json()["error"]["code"] == "ARTIFACT_NOT_FOUND"
+
+    # P2 CORS: cross-origin download exposes Content-Disposition for browser filename parsing
+    dl_cors = client.get(
+        sign_body["download_path"],
+        headers={**headers_a, "Origin": "http://localhost:3000"},
+    )
+    assert dl_cors.status_code == 200
+    assert dl_cors.headers.get("access-control-allow-origin") == "http://localhost:3000"
+    exposed = dl_cors.headers.get("access-control-expose-headers", "")
+    assert "Content-Disposition" in exposed
+    assert "attachment" in dl_cors.headers.get("content-disposition", "")
+

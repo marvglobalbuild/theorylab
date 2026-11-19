@@ -155,7 +155,7 @@ export function AnalysisReviewStage({ analysis, analyzing }: AnalysisReviewStage
           </dd>
           <dd className="mt-1 text-xs text-muted-foreground tabular-nums">
             {vocalPitch
-              ? `${vocalPitch.note_events.length} note events · ${Math.round(vocalPitch.voiced_ratio * 100)}% voiced`
+              ? `${vocalPitch.note_event_count ?? vocalPitch.note_events.length} note events · ${Math.round(vocalPitch.voiced_ratio * 100)}% voiced`
               : "Monophonic vocal contour pending"}
           </dd>
         </div>

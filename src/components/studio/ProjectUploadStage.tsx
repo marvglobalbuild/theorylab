@@ -1,5 +1,5 @@
 import { AlertCircle, CheckCircle2, Pause, Play, RefreshCw, Trash2, Upload } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { ProgressRule } from "@/components/workspace/WorkspacePrimitives";
@@ -30,6 +30,8 @@ export interface ProjectUploadStageProps {
   locked: boolean;
   onSelectFile: (file: File | null, validationError?: string | null) => void;
   onUploadAndAnalyse: () => void;
+  onBeforePlay?: () => void;
+  registerStopPlayback?: (stopFn: () => void) => void;
 }
 
 export function ProjectUploadStage({
@@ -45,6 +47,8 @@ export function ProjectUploadStage({
   locked,
   onSelectFile,
   onUploadAndAnalyse,
+  onBeforePlay,
+  registerStopPlayback,
 }: ProjectUploadStageProps) {
   const fileInputId = useId();
   const projectInputId = useId();
@@ -81,18 +85,27 @@ export function ProjectUploadStage({
     };
   }, [selectedFile]);
 
-  useEffect(() => {
+  const stopLocalPreview = useCallback(() => {
     const audioEl = audioRef.current;
-    return () => {
-      if (audioEl) {
-        audioEl.pause();
-        audioEl.src = "";
-      }
-    };
+    if (audioEl && !audioEl.paused) {
+      audioEl.pause();
+    }
+    setIsPlaying(false);
   }, []);
+
+  useEffect(() => {
+    registerStopPlayback?.(stopLocalPreview);
+  }, [registerStopPlayback, stopLocalPreview]);
+
+  useEffect(() => {
+    return () => {
+      stopLocalPreview();
+    };
+  }, [stopLocalPreview]);
 
   const handleCandidateFile = (file: File | null) => {
     if (!file) return;
+    stopLocalPreview();
     const check = validateAudioFileForUpload(file, maxBytes, allowedFormats);
     if (!check.valid) {
       setLocalError(check.message ?? "Invalid audio file.");
@@ -118,9 +131,9 @@ export function ProjectUploadStage({
     const audio = audioRef.current;
     if (!audio || !previewUrl) return;
     if (isPlaying) {
-      audio.pause();
-      setIsPlaying(false);
+      stopLocalPreview();
     } else {
+      onBeforePlay?.();
       try {
         await audio.play();
         setIsPlaying(true);
@@ -305,6 +318,7 @@ export function ProjectUploadStage({
                 ref={audioRef}
                 src={previewUrl}
                 preload="metadata"
+                onPlay={() => onBeforePlay?.()}
                 onLoadedMetadata={(e) => setDurationSec(e.currentTarget.duration || 0)}
                 onTimeUpdate={(e) => setCurrentSec(e.currentTarget.currentTime)}
                 onEnded={() => setIsPlaying(false)}

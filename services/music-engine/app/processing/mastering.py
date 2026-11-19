@@ -8,7 +8,7 @@ import pyloudnorm as pyln
 from pydantic import BaseModel, Field
 from scipy import signal
 
-TRUE_PEAK_METHOD_LABEL = "4x_oversampled_polyphase_itu_bs1770"
+TRUE_PEAK_METHOD_LABEL = "4x_oversampled_polyphase_estimate"
 SILENCE_PEAK_THRESHOLD = 1e-6
 SILENCE_LUFS_FLOOR = -70.0
 
@@ -83,8 +83,8 @@ def ensure_stereo_float64(audio: np.ndarray) -> np.ndarray:
 
 def measure_true_peak_linear(samples_stereo: np.ndarray, oversampling_factor: int = 4) -> float:
     """
-    Estimate true peak (inter-sample peak) via polyphase FIR oversampling
-    (ITU-R BS.1770-4 Annex 2 style 4x upsampling). Distinct from sample peak.
+    Estimate inter-sample peak via 4x polyphase FIR oversampling (scipy.signal.resample_poly).
+    Distinct from sample peak; engineering estimate rather than certified ITU-R BS.1770-4 Annex 2.
     """
     if samples_stereo.size == 0:
         return 0.0
@@ -330,7 +330,8 @@ class LoudnessMasterProcessor:
                 applied_gain_db = desired_gain_db
                 notes.append(
                     f"Applied gentle true-peak limiting (predicted overshoot {overshoot_db:.2f} dB <= "
-                    f"{cfg.max_limiting_db:.1f} dB safeguard) to satisfy {cfg.true_peak_ceiling_dbtp:.1f} dBTP ceiling."
+                    f"{cfg.max_limiting_db:.1f} dB safeguard) to satisfy {cfg.true_peak_ceiling_dbtp:.1f} dB "
+                    "(4x oversampled estimate) ceiling."
                 )
 
             gained = stereo * db_to_linear(applied_gain_db)
@@ -384,8 +385,8 @@ class LoudnessMasterProcessor:
             if output_metrics.integrated_lufs is not None:
                 warnings.append(
                     f"Achieved integrated loudness ({output_metrics.integrated_lufs:.2f} LUFS) differs from "
-                    f"target ({cfg.target_lufs:.1f} LUFS) due to true-peak ceiling ({cfg.true_peak_ceiling_dbtp:.1f} dBTP) "
-                    "and dynamic-range preservation constraints."
+                    f"target ({cfg.target_lufs:.1f} LUFS) due to peak ceiling ({cfg.true_peak_ceiling_dbtp:.1f} dB, "
+                    "4x oversampled estimate) and dynamic-range preservation constraints."
                 )
 
         # Dynamic range preserved if crest factor drop is minimal (<= max_limiting_db + 1.0 dB)

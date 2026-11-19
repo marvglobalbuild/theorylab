@@ -18,7 +18,12 @@ import type {
   MusicProcessingJob,
 } from "@/services/contracts";
 import { RealAudioWaveform } from "./RealAudioWaveform";
-import { formatPanLabel, formatSecondsClock } from "./studio-types";
+import {
+  dbToGainRatio,
+  formatPanLabel,
+  formatSecondsClock,
+  mapTimeBetweenPreviewModes,
+} from "./studio-types";
 
 export type PreviewMode = "final_mix" | "original_vocal" | "accompaniment" | "stems_mixer";
 
@@ -34,7 +39,14 @@ export interface AudioPreviewDeckProps {
   result: AccompanimentJobResult | null;
   service: MusicIntelligenceService;
   localVocalFile?: File | null;
-  onSyncStemControlsToMix?: (gainsDb: Record<string, number>, pans: Record<string, number>) => void;
+  onSyncStemControlsToMix?: (
+    gainsDb: Record<string, number>,
+    pans: Record<string, number>,
+    mutedStems?: string[],
+    soloStems?: string[],
+  ) => void;
+  onBeforePlay?: () => void;
+  registerStopPlayback?: (stopFn: () => void) => void;
 }
 
 interface LoadedAudioAsset {
@@ -48,12 +60,78 @@ function gainRatioToDb(ratio: number): number {
   return Math.max(-24, Math.min(12, Number((20 * Math.log10(ratio)).toFixed(1))));
 }
 
+function hydrateStemControlsFromJob(
+  job: MusicProcessingJob | null,
+  result: AccompanimentJobResult | null,
+): Record<string, StemMixerState> {
+  const stemsList = result?.synthesis?.individual_stems ?? [];
+  const rawMix =
+    job?.parameters && typeof job.parameters["mix"] === "object" && job.parameters["mix"] !== null
+      ? (job.parameters["mix"] as Record<string, unknown>)
+      : null;
+
+  const paramGains =
+    rawMix && typeof rawMix["stem_gains_db"] === "object" && rawMix["stem_gains_db"] !== null
+      ? (rawMix["stem_gains_db"] as Record<string, unknown>)
+      : {};
+  const paramPans =
+    rawMix && typeof rawMix["stem_pans"] === "object" && rawMix["stem_pans"] !== null
+      ? (rawMix["stem_pans"] as Record<string, unknown>)
+      : {};
+  const paramMuted = Array.isArray(rawMix?.["muted_stems"])
+    ? new Set(rawMix["muted_stems"].filter((s): s is string => typeof s === "string"))
+    : new Set<string>();
+  const paramSolo = Array.isArray(rawMix?.["solo_stems"])
+    ? new Set(rawMix["solo_stems"].filter((s): s is string => typeof s === "string"))
+    : new Set<string>();
+
+  const mixedTracksById = new Map(
+    (result?.mixing?.tracks_mixed ?? [])
+      .filter((t) => t.track_id.startsWith("stem:"))
+      .map((t) => [t.track_id.slice("stem:".length), t]),
+  );
+
+  const nextStems: Record<string, StemMixerState> = {};
+  for (const stem of stemsList) {
+    const id = stem.instrument_id;
+    const mixedTrack = mixedTracksById.get(id);
+    const rawGain = paramGains[id];
+    const gainDb =
+      typeof rawGain === "number" && Number.isFinite(rawGain)
+        ? rawGain
+        : mixedTrack && Number.isFinite(mixedTrack.applied_gain_db)
+          ? mixedTrack.applied_gain_db
+          : null;
+
+    const rawPan = paramPans[id];
+    const panVal =
+      typeof rawPan === "number" && Number.isFinite(rawPan)
+        ? rawPan
+        : mixedTrack && Number.isFinite(mixedTrack.pan)
+          ? mixedTrack.pan
+          : 0.0;
+
+    const isSolo = paramSolo.has(id);
+    const isMuted = paramMuted.has(id) || (paramSolo.size === 0 && Boolean(mixedTrack?.muted));
+
+    nextStems[id] = {
+      muted: isMuted,
+      solo: isSolo,
+      volume: gainDb !== null ? dbToGainRatio(gainDb) : 1.0,
+      pan: Math.max(-1, Math.min(1, Number(panVal.toFixed(2)))),
+    };
+  }
+  return nextStems;
+}
+
 export function AudioPreviewDeck({
   job,
   result,
   service,
   localVocalFile,
   onSyncStemControlsToMix,
+  onBeforePlay,
+  registerStopPlayback,
 }: AudioPreviewDeckProps) {
   const [mode, setMode] = useState<PreviewMode>("final_mix");
   const [abTarget, setAbTarget] = useState<"final_mix" | "original_vocal">("final_mix");
@@ -77,6 +155,7 @@ export function AudioPreviewDeck({
   const playStartCtxTimeRef = useRef<number>(0);
   const playStartOffsetRef = useRef<number>(0);
   const rafRef = useRef<number | null>(null);
+  const playbackTokenRef = useRef<number>(0);
 
   // Fallback HTMLAudioElement when Web Audio decodeAudioData is unavailable (e.g., jsdom or unsupported codec)
   const htmlAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -99,27 +178,8 @@ export function AudioPreviewDeck({
   const stemsList = useMemo(() => result?.synthesis?.individual_stems ?? [], [result]);
   const hasFinalMix = Boolean(masterExportArtifact);
 
-  // Reset default mode when job changes
-  useEffect(() => {
-    setMode(hasFinalMix ? "final_mix" : "accompaniment");
-    setAbTarget(hasFinalMix ? "final_mix" : "original_vocal");
-    setCurrentTimeSec(0);
-    setPlaybackError(null);
-    setLoadedAssets({});
-
-    const nextStems: Record<string, StemMixerState> = {};
-    for (const stem of stemsList) {
-      nextStems[stem.instrument_id] = {
-        muted: false,
-        solo: false,
-        volume: 1.0,
-        pan: 0.0,
-      };
-    }
-    setStemControls(nextStems);
-  }, [job?.job_id, hasFinalMix, stemsList]);
-
   const stopAllPlayback = useCallback(() => {
+    playbackTokenRef.current += 1;
     if (rafRef.current !== null) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
@@ -141,6 +201,27 @@ export function AudioPreviewDeck({
     }
     setIsPlaying(false);
   }, []);
+
+  useEffect(() => {
+    registerStopPlayback?.(stopAllPlayback);
+  }, [registerStopPlayback, stopAllPlayback]);
+
+  const latestJobRef = useRef(job);
+  const latestResultRef = useRef(result);
+  latestJobRef.current = job;
+  latestResultRef.current = result;
+
+  // Stop any active playback and reset/hydrate deck state whenever the active job changes
+  const activeJobId = job?.job_id ?? null;
+  useEffect(() => {
+    stopAllPlayback();
+    setMode(hasFinalMix ? "final_mix" : "accompaniment");
+    setAbTarget(hasFinalMix ? "final_mix" : "original_vocal");
+    setCurrentTimeSec(0);
+    setPlaybackError(null);
+    setLoadedAssets({});
+    setStemControls(hydrateStemControlsFromJob(latestJobRef.current, latestResultRef.current));
+  }, [activeJobId, hasFinalMix, stopAllPlayback]);
 
   // Strict cleanup on unmount
   useEffect(() => {
@@ -262,7 +343,23 @@ export function AudioPreviewDeck({
           ? "accompaniment"
           : "accompaniment";
 
+  const introOffsetMs = result?.mixing?.intro_offset_ms ?? 0;
+  const introOffsetSec = introOffsetMs / 1000;
+
   const activeDurationSec = useMemo(() => {
+    if (mode === "stems_mixer") {
+      const loadedStemDurations = stemsList
+        .map((s) => loadedAssets[`stem_${s.instrument_id}`]?.durationSec ?? 0)
+        .filter((d) => d > 0);
+      const vocalDur =
+        loadedAssets["original_vocal"]?.durationSec ??
+        (job?.audio_metadata?.duration_ms ?? 0) / 1000;
+      const vocalEnd = vocalDur > 0 ? introOffsetSec + vocalDur : 0;
+      const synthDur = (result?.synthesis?.duration_ms ?? 0) / 1000;
+      const mixDur = (result?.mixing?.mix_duration_ms ?? 0) / 1000;
+      return Math.max(0, synthDur, mixDur, vocalEnd, ...loadedStemDurations);
+    }
+
     const asset = loadedAssets[activeAssetKey];
     if (asset && asset.durationSec > 0) return asset.durationSec;
     if (mode === "original_vocal" && job?.audio_metadata?.duration_ms) {
@@ -275,12 +372,14 @@ export function AudioPreviewDeck({
       return result.synthesis.duration_ms / 1000;
     }
     return 0;
-  }, [loadedAssets, activeAssetKey, mode, job, result]);
+  }, [loadedAssets, activeAssetKey, mode, job, result, stemsList, introOffsetSec]);
 
   const startPlaybackAt = useCallback(
     async (targetMode: PreviewMode, startOffsetSec: number) => {
       if (!job || !result) return;
+      onBeforePlay?.();
       stopAllPlayback();
+      const token = playbackTokenRef.current;
       setPlaybackError(null);
       setLoadingAsset(true);
 
@@ -289,6 +388,7 @@ export function AudioPreviewDeck({
         if (ctx && ctx.state === "suspended") {
           await ctx.resume();
         }
+        if (playbackTokenRef.current !== token) return;
 
         if (targetMode === "stems_mixer" && stemsList.length > 0) {
           const stemAssets = await Promise.all(
@@ -302,6 +402,7 @@ export function AudioPreviewDeck({
             job.source_audio.object_path,
             localVocalFile,
           );
+          if (playbackTokenRef.current !== token) return;
 
           const playableStems = stemAssets.filter((item) => item.asset?.buffer);
           if (!ctx || playableStems.length === 0) {
@@ -316,9 +417,10 @@ export function AudioPreviewDeck({
           masterGain.connect(ctx.destination);
           masterGainRef.current = masterGain;
 
+          const vocalEndSec = vocalAsset?.buffer ? introOffsetSec + vocalAsset.buffer.duration : 0;
           const maxDuration = Math.max(
             ...playableStems.map((s) => s.asset!.buffer!.duration),
-            vocalAsset?.buffer?.duration ?? 0,
+            vocalEndSec,
           );
           const clampedOffset = Math.max(
             0,
@@ -353,7 +455,6 @@ export function AudioPreviewDeck({
           }
 
           if (vocalAsset?.buffer) {
-            const introOffsetSec = (result.mixing?.intro_offset_ms ?? 0) / 1000;
             const src = ctx.createBufferSource();
             src.buffer = vocalAsset.buffer;
             const gain = ctx.createGain();
@@ -416,7 +517,7 @@ export function AudioPreviewDeck({
           path,
           targetMode === "original_vocal" ? localVocalFile : null,
         );
-        if (!asset) return;
+        if (!asset || playbackTokenRef.current !== token) return;
 
         if (ctx && asset.buffer) {
           const masterGain = ctx.createGain();
@@ -472,6 +573,10 @@ export function AudioPreviewDeck({
             setCurrentTimeSec(0);
           };
           await audio.play();
+          if (playbackTokenRef.current !== token) {
+            audio.pause();
+            return;
+          }
           setIsPlaying(true);
         }
       } finally {
@@ -481,6 +586,7 @@ export function AudioPreviewDeck({
     [
       job,
       result,
+      onBeforePlay,
       stopAllPlayback,
       getOrCreateAudioContext,
       stemsList,
@@ -492,19 +598,21 @@ export function AudioPreviewDeck({
       includeVocalInStemMix,
       masterExportArtifact,
       accompanimentPath,
+      introOffsetSec,
     ],
   );
 
   const handleModeChange = (nextMode: PreviewMode) => {
     const wasPlaying = isPlaying;
-    const resumeAt = currentTimeSec;
+    const mappedTime = mapTimeBetweenPreviewModes(currentTimeSec, mode, nextMode, introOffsetMs);
     stopAllPlayback();
     setMode(nextMode);
+    setCurrentTimeSec(mappedTime);
     if (nextMode === "final_mix" || nextMode === "original_vocal") {
       setAbTarget(nextMode);
     }
     if (wasPlaying) {
-      void startPlaybackAt(nextMode, resumeAt);
+      void startPlaybackAt(nextMode, mappedTime);
     }
   };
 
@@ -524,20 +632,28 @@ export function AudioPreviewDeck({
   };
 
   const updateStem = (instrumentId: string, patch: Partial<StemMixerState>) => {
-    setStemControls((prev) => {
-      const current = prev[instrumentId] ?? { muted: false, solo: false, volume: 1.0, pan: 0.0 };
-      const updated = { ...prev, [instrumentId]: { ...current, ...patch } };
-      if (onSyncStemControlsToMix) {
-        const gainsDb: Record<string, number> = {};
-        const pans: Record<string, number> = {};
-        for (const [id, st] of Object.entries(updated)) {
-          gainsDb[id] = st.muted ? -24 : gainRatioToDb(st.volume);
-          pans[id] = Number(st.pan.toFixed(2));
-        }
-        onSyncStemControlsToMix(gainsDb, pans);
+    const current = stemControls[instrumentId] ?? {
+      muted: false,
+      solo: false,
+      volume: 1.0,
+      pan: 0.0,
+    };
+    const updated = { ...stemControls, [instrumentId]: { ...current, ...patch } };
+    setStemControls(updated);
+
+    if (onSyncStemControlsToMix) {
+      const gainsDb: Record<string, number> = {};
+      const pans: Record<string, number> = {};
+      const mutedStems: string[] = [];
+      const soloStems: string[] = [];
+      for (const [id, st] of Object.entries(updated)) {
+        gainsDb[id] = gainRatioToDb(st.volume);
+        pans[id] = Number(st.pan.toFixed(2));
+        if (st.muted) mutedStems.push(id);
+        if (st.solo) soloStems.push(id);
       }
-      return updated;
-    });
+      onSyncStemControlsToMix(gainsDb, pans, mutedStems, soloStems);
+    }
   };
 
   if (!job || !result) {
@@ -774,9 +890,15 @@ export function AudioPreviewDeck({
       {stemsList.length > 0 && (
         <div className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-              Individual instrument stems ({stemsList.length})
-            </h3>
+            <div>
+              <h3 className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                Individual instrument stems ({stemsList.length})
+              </h3>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Real-time stem preview monitors un-mastered stems; Mute, Solo, Volume, and Pan sync
+                to Stage 06 for the mastered render.
+              </p>
+            </div>
             <label className="inline-flex items-center gap-2 text-xs text-foreground cursor-pointer">
               <input
                 type="checkbox"
