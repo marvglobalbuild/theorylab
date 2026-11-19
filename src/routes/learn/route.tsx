@@ -4,6 +4,7 @@ import {
   ClipboardCheck,
   Clock,
   Compass,
+  Headphones,
   Layers,
   LayoutDashboard,
   Music,
@@ -25,6 +26,7 @@ const LEARNER_NAV: WorkspaceNavItem[] = [
   { to: "/learn/keyboard", label: "Virtual Keyboard", icon: Piano },
   { to: "/learn/harmony", label: "Harmony Studio", icon: Layers },
   { to: "/learn/rhythm", label: "Rhythm Lab", icon: Clock },
+  { to: "/learn/ear-training", label: "Ear Training Studio", icon: Headphones },
   { to: "/learn/assessments", label: "Assessments", icon: ClipboardCheck },
   { to: "/learn/progress", label: "Progress", icon: TrendingUp },
 ];
@@ -38,6 +40,7 @@ const TITLES: Record<string, string> = {
   "/learn/keyboard": "Virtual Keyboard",
   "/learn/harmony": "Harmony Studio",
   "/learn/rhythm": "Rhythm Lab",
+  "/learn/ear-training": "Ear Training Studio",
   "/learn/assessments": "Assessments",
   "/learn/progress": "Progress",
 };
