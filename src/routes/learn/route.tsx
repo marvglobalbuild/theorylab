@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   Music,
   Piano,
+  Sliders,
   TrendingUp,
 } from "lucide-react";
 
@@ -24,6 +25,7 @@ const LEARNER_NAV: WorkspaceNavItem[] = [
   { to: "/learn/practice", label: "Quick Practice", icon: Piano },
   { to: "/learn/notation", label: "Notation Lab", icon: Music },
   { to: "/learn/keyboard", label: "Virtual Keyboard", icon: Piano },
+  { to: "/learn/scales-intervals", label: "Scales & Intervals", icon: Sliders },
   { to: "/learn/harmony", label: "Harmony Studio", icon: Layers },
   { to: "/learn/rhythm", label: "Rhythm Lab", icon: Clock },
   { to: "/learn/ear-training", label: "Ear Training Studio", icon: Headphones },
@@ -38,6 +40,7 @@ const TITLES: Record<string, string> = {
   "/learn/practice": "Quick Practice",
   "/learn/notation": "Notation Lab",
   "/learn/keyboard": "Virtual Keyboard",
+  "/learn/scales-intervals": "Scales & Intervals",
   "/learn/harmony": "Harmony Studio",
   "/learn/rhythm": "Rhythm Lab",
   "/learn/ear-training": "Ear Training Studio",

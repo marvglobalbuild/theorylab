@@ -41,6 +41,7 @@ import { Route as LearnPathsRouteImport } from './routes/learn/paths'
 import { Route as LearnPracticeRouteImport } from './routes/learn/practice'
 import { Route as LearnProgressRouteImport } from './routes/learn/progress'
 import { Route as LearnRhythmRouteImport } from './routes/learn/rhythm'
+import { Route as LearnScalesIntervalsRouteImport } from './routes/learn/scales-intervals'
 import { Route as TeachIndexRouteImport } from './routes/teach/index'
 import { Route as TeachAssessmentsRouteImport } from './routes/teach/assessments'
 import { Route as TeachAssignmentsRouteImport } from './routes/teach/assignments'
@@ -210,6 +211,11 @@ const LearnRhythmRoute = LearnRhythmRouteImport.update({
   path: '/rhythm',
   getParentRoute: () => LearnRouteRoute,
 } as any)
+const LearnScalesIntervalsRoute = LearnScalesIntervalsRouteImport.update({
+  id: '/scales-intervals',
+  path: '/scales-intervals',
+  getParentRoute: () => LearnRouteRoute,
+} as any)
 const TeachIndexRoute = TeachIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -282,6 +288,7 @@ export interface FileRoutesByFullPath {
   '/learn/practice': typeof LearnPracticeRoute
   '/learn/progress': typeof LearnProgressRoute
   '/learn/rhythm': typeof LearnRhythmRoute
+  '/learn/scales-intervals': typeof LearnScalesIntervalsRoute
   '/teach/assessments': typeof TeachAssessmentsRoute
   '/teach/assignments': typeof TeachAssignmentsRoute
   '/teach/classes': typeof TeachClassesRoute
@@ -321,6 +328,7 @@ export interface FileRoutesByTo {
   '/learn/practice': typeof LearnPracticeRoute
   '/learn/progress': typeof LearnProgressRoute
   '/learn/rhythm': typeof LearnRhythmRoute
+  '/learn/scales-intervals': typeof LearnScalesIntervalsRoute
   '/teach/assessments': typeof TeachAssessmentsRoute
   '/teach/assignments': typeof TeachAssignmentsRoute
   '/teach/classes': typeof TeachClassesRoute
@@ -364,6 +372,7 @@ export interface FileRoutesById {
   '/learn/practice': typeof LearnPracticeRoute
   '/learn/progress': typeof LearnProgressRoute
   '/learn/rhythm': typeof LearnRhythmRoute
+  '/learn/scales-intervals': typeof LearnScalesIntervalsRoute
   '/teach/assessments': typeof TeachAssessmentsRoute
   '/teach/assignments': typeof TeachAssignmentsRoute
   '/teach/classes': typeof TeachClassesRoute
@@ -408,6 +417,7 @@ export interface FileRouteTypes {
     | '/learn/practice'
     | '/learn/progress'
     | '/learn/rhythm'
+    | '/learn/scales-intervals'
     | '/teach/assessments'
     | '/teach/assignments'
     | '/teach/classes'
@@ -447,6 +457,7 @@ export interface FileRouteTypes {
     | '/learn/practice'
     | '/learn/progress'
     | '/learn/rhythm'
+    | '/learn/scales-intervals'
     | '/teach/assessments'
     | '/teach/assignments'
     | '/teach/classes'
@@ -489,6 +500,7 @@ export interface FileRouteTypes {
     | '/learn/practice'
     | '/learn/progress'
     | '/learn/rhythm'
+    | '/learn/scales-intervals'
     | '/teach/assessments'
     | '/teach/assignments'
     | '/teach/classes'
@@ -743,6 +755,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LearnRhythmRouteImport
       parentRoute: typeof LearnRouteRoute
     }
+    '/learn/scales-intervals': {
+      id: '/learn/scales-intervals'
+      path: '/scales-intervals'
+      fullPath: '/learn/scales-intervals'
+      preLoaderRoute: typeof LearnScalesIntervalsRouteImport
+      parentRoute: typeof LearnRouteRoute
+    }
     '/teach/': {
       id: '/teach/'
       path: '/'
@@ -839,6 +858,7 @@ interface LearnRouteRouteChildren {
   LearnPracticeRoute: typeof LearnPracticeRoute
   LearnProgressRoute: typeof LearnProgressRoute
   LearnRhythmRoute: typeof LearnRhythmRoute
+  LearnScalesIntervalsRoute: typeof LearnScalesIntervalsRoute
   LearnIndexRoute: typeof LearnIndexRoute
   LearnLessonsLessonSlugRoute: typeof LearnLessonsLessonSlugRoute
 }
@@ -854,6 +874,7 @@ const LearnRouteRouteChildren: LearnRouteRouteChildren = {
   LearnPracticeRoute: LearnPracticeRoute,
   LearnProgressRoute: LearnProgressRoute,
   LearnRhythmRoute: LearnRhythmRoute,
+  LearnScalesIntervalsRoute: LearnScalesIntervalsRoute,
   LearnIndexRoute: LearnIndexRoute,
   LearnLessonsLessonSlugRoute: LearnLessonsLessonSlugRoute,
 }
