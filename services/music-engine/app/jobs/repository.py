@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -83,26 +84,71 @@ class JobRepository(ABC):
 
 
 class InMemoryJobRepository(JobRepository):
-    """Thread/task-safe in-memory job repository for standalone execution and testing."""
+    """Thread/task-safe in-memory job repository with local disk rehydration for standalone execution and testing."""
 
-    def __init__(self) -> None:
+    def __init__(self, storage_dir: Path | None = None) -> None:
         self._lock = asyncio.Lock()
         self._jobs: dict[str, JobResponse] = {}
         self._idempotency: dict[tuple[str, str], str] = {}
+        self._storage_dir = Path(storage_dir).resolve() if storage_dir is not None else None
+        if self._storage_dir and self._storage_dir.is_dir():
+            self._preload_from_disk()
+
+    def _preload_from_disk(self) -> None:
+        if not self._storage_dir:
+            return
+        for job_file in self._storage_dir.glob("*/jobs/*/job.json"):
+            try:
+                job = JobResponse.model_validate_json(job_file.read_text(encoding="utf-8"))
+                self._jobs[job.job_id] = job
+            except Exception:
+                continue
+
+    def _persist_to_disk(self, job: JobResponse) -> None:
+        if not self._storage_dir:
+            return
+        try:
+            target_dir = self._storage_dir / job.user_id / "jobs" / job.job_id
+            target_dir.mkdir(parents=True, exist_ok=True)
+            job_file = target_dir / "job.json"
+            job_file.write_text(job.model_dump_json(indent=2), encoding="utf-8")
+        except Exception:
+            pass
 
     async def create(self, job: JobResponse, idempotency_key: str | None = None) -> JobResponse:
         async with self._lock:
             self._jobs[job.job_id] = job
             if idempotency_key:
                 self._idempotency[(job.user_id, idempotency_key)] = job.job_id
+            self._persist_to_disk(job)
             return job
 
     async def get_by_id(self, job_id: str) -> JobResponse | None:
         async with self._lock:
-            return self._jobs.get(job_id)
+            if job_id in self._jobs:
+                return self._jobs[job_id]
+            if self._storage_dir:
+                for candidate in self._storage_dir.glob(f"*/jobs/{job_id}/job.json"):
+                    try:
+                        job = JobResponse.model_validate_json(candidate.read_text(encoding="utf-8"))
+                        self._jobs[job.job_id] = job
+                        return job
+                    except Exception:
+                        pass
+            return None
 
     async def list_by_user(self, user_id: str, limit: int = 50) -> list[JobResponse]:
         async with self._lock:
+            if self._storage_dir:
+                user_jobs_dir = self._storage_dir / user_id / "jobs"
+                if user_jobs_dir.is_dir():
+                    for candidate in user_jobs_dir.glob("*/job.json"):
+                        if candidate.parent.name not in self._jobs:
+                            try:
+                                job = JobResponse.model_validate_json(candidate.read_text(encoding="utf-8"))
+                                self._jobs[job.job_id] = job
+                            except Exception:
+                                pass
             owned = [j for j in self._jobs.values() if j.user_id == user_id]
             owned.sort(key=lambda j: j.created_at, reverse=True)
             return owned[:limit]
@@ -121,6 +167,7 @@ class InMemoryJobRepository(JobRepository):
     async def update(self, job: JobResponse) -> JobResponse:
         async with self._lock:
             self._jobs[job.job_id] = job
+            self._persist_to_disk(job)
             return job
 
     async def count_active_by_user(self, user_id: str) -> int:
@@ -141,6 +188,7 @@ class InMemoryJobRepository(JobRepository):
             if existing is None or existing.status != expected_status:
                 return None
             self._jobs[job.job_id] = job
+            self._persist_to_disk(job)
             return job
 
     async def list_stale_processing_jobs(

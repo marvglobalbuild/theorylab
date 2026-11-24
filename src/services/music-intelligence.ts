@@ -800,12 +800,25 @@ export function createMusicIntelligenceService(
 
       const url = `${baseUrl}/api/v1/jobs/${encodeURIComponent(trimmedId)}/artifacts/download?object_path=${encodeURIComponent(trimmedPath)}`;
       try {
-        const response = await fetchFn(url, {
+        let response = await fetchFn(url, {
           method: "GET",
           headers: {
             Authorization: `Bearer ${auth.token}`,
           },
         });
+
+        // If 401 occurs, attempt a session refresh & retry
+        if (response.status === 401) {
+          const refreshed = await resolveAccessToken(true);
+          if ("ok" in refreshed) {
+            response = await fetchFn(url, {
+              method: "GET",
+              headers: {
+                Authorization: `Bearer ${refreshed.token}`,
+              },
+            });
+          }
+        }
 
         if (!response.ok) {
           return await parseErrorResponse(response);

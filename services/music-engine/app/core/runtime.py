@@ -36,7 +36,8 @@ def build_storage(settings: Settings) -> StorageAdapter:
 def build_repository(settings: Settings) -> JobRepository:
     if settings.music_engine_job_repository_backend == "supabase":
         return SupabaseJobRepository(settings)
-    return InMemoryJobRepository()
+    storage_root = (settings.local_storage_path / settings.supabase_audio_bucket).resolve()
+    return InMemoryJobRepository(storage_dir=storage_root)
 
 
 def build_asset_repository(settings: Settings) -> AudioAssetRepository:

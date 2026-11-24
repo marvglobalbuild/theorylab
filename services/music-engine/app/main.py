@@ -112,10 +112,19 @@ def create_app(
     app.add_middleware(
         CORSMiddleware,
         allow_origins=resolved_settings.cors_origins_list,
+        allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|0\.0\.0\.0)(:\d+)?$",
         allow_credentials=True,
         allow_methods=["GET", "POST", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
-        expose_headers=["Content-Disposition", "X-Request-ID"],
+        allow_headers=["*"],
+        allow_private_network=True,
+        expose_headers=[
+            "Content-Disposition",
+            "Content-Range",
+            "Accept-Ranges",
+            "Content-Length",
+            "Content-Type",
+            "X-Request-ID",
+        ],
     )
 
     @app.middleware("http")
