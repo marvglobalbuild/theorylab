@@ -387,43 +387,22 @@ class LibrosaMusicalAnalyzer(AudioAnalysisInterface):
                 tuning_bins = 0.0
                 tuning_offset_cents = None
 
-        # 3. Harmonic-Percussive Separation & Chroma Extraction
-        if len(y_norm) >= 2048:
-            try:
-                y_harm, y_perc = librosa.effects.hpss(y_norm)
-            except Exception:
-                y_harm, y_perc = y_norm, y_norm
-        else:
-            y_harm, y_perc = y_norm, y_norm
-
+        # 3. Fast Spectral Representation & Chroma Extraction
         n_fft = min(2048, max(256, 2 ** int(np.floor(np.log2(max(256, len(y_norm)))))))
         hop_length = min(self.HOP_LENGTH, max(128, n_fft // 4))
         hop_ms = max(1, int(round((hop_length / float(sr)) * 1000.0)))
 
-        # Use CQT chroma when audio is long enough for lowest octave filterbank, else STFT chroma
-        try:
-            if duration_sec >= 0.75:
-                chroma = librosa.feature.chroma_cqt(
-                    y=y_harm,
-                    sr=sr,
-                    hop_length=hop_length,
-                    tuning=tuning_bins,
-                )
-            else:
-                chroma = librosa.feature.chroma_stft(
-                    y=y_harm,
-                    sr=sr,
-                    n_fft=n_fft,
-                    hop_length=hop_length,
-                    tuning=tuning_bins,
-                )
-        except Exception:
-            chroma = librosa.feature.chroma_stft(
-                y=y_harm,
-                sr=sr,
-                n_fft=n_fft,
-                hop_length=hop_length,
-            )
+        # Compute STFT magnitude once (bypasses redundant HPSS and multi-octave CQT filterbank latency)
+        S = np.abs(librosa.stft(y_norm, n_fft=n_fft, hop_length=hop_length))
+        S_pow = S ** 2
+
+        # Accurate 12-bin pitch-class chroma with tuning adjustment
+        chroma = librosa.feature.chroma_stft(
+            S=S_pow,
+            sr=sr,
+            n_fft=n_fft,
+            tuning=tuning_bins,
+        )
 
         chroma = np.nan_to_num(chroma, nan=0.0, posinf=0.0, neginf=0.0)
         chroma_frame_count = int(chroma.shape[1])
@@ -456,8 +435,7 @@ class LibrosaMusicalAnalyzer(AudioAnalysisInterface):
         elif is_broadband_noise:
             warnings.append("Broadband noise lacks clear rhythmic transients; tempo and beat-grid estimation suppressed.")
         else:
-            onset_source = y_perc if float(np.sqrt(np.mean(np.square(y_perc)))) > 0.02 else y_norm
-            onset_env = librosa.onset.onset_strength(y=onset_source, sr=sr, hop_length=hop_length)
+            onset_env = librosa.onset.onset_strength(y=y_norm, sr=sr, hop_length=hop_length)
             onset_std = float(np.std(onset_env)) if onset_env.size > 0 else 0.0
             onset_max = float(np.max(onset_env)) if onset_env.size > 0 else 0.0
             onset_mean = float(np.mean(onset_env)) if onset_env.size > 0 else 0.0
@@ -507,9 +485,14 @@ class LibrosaMusicalAnalyzer(AudioAnalysisInterface):
                     std_ibi = float(np.std(ibi_for_cv))
                     ibi_cv = (std_ibi / mean_ibi) if mean_ibi > 1e-6 else 1.0
 
-                    # Pulse clarity from onset autocorrelation strength
-                    tempogram = librosa.feature.tempogram(onset_envelope=onset_env, sr=sr, hop_length=hop_length)
-                    pulse_strength = float(np.mean(np.max(tempogram[1:], axis=0))) if tempogram.shape[0] > 1 else 0.0
+                    # Pulse clarity from onset autocorrelation strength (avoids expensive 2D tempogram FFT)
+                    max_lag = max(2, int(round(4.0 * sr / hop_length)))
+                    ac = librosa.autocorrelate(onset_env, max_size=max_lag)
+                    if ac.size > 1 and ac[0] > 1e-9:
+                        ac_norm = ac[1:] / ac[0]
+                        pulse_strength = float(np.max(ac_norm)) if ac_norm.size > 0 else 0.0
+                    else:
+                        pulse_strength = 0.0
 
                     if ibi_cv <= 0.06:
                         tempo_stability = "steady"

@@ -125,6 +125,11 @@ def validate_uploaded_bytes_metadata(
 ) -> tuple[str, int]:
     """Helper for direct audio/video/MIDI upload validation before writing to workspace/storage."""
     validate_declared_extension_and_mime(filename, declared_mime_type)
+    if len(data) == 0:
+        raise AudioValidationError(
+            "Media file is empty (0 bytes).",
+            code="EMPTY_AUDIO_FILE",
+        )
     if len(data) < 4:
         raise AudioValidationError(
             "Uploaded media data is too short to contain a valid header.",

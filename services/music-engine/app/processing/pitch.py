@@ -255,6 +255,7 @@ class LibrosaPyinPitchExtractor(PitchExtractionInterface):
         fmax_hz = max(fmin_hz * 2.0, min(fmax_hz, sr / 2.5))
         min_voiced_prob = float(options.get("min_voiced_prob", 0.30))
         min_note_duration_ms = int(options.get("min_note_duration_ms", 80))
+        resolution = float(options.get("resolution", 0.15))
 
         frame_length = min(self.DEFAULT_FRAME_LENGTH, max(512, 2 ** int(np.floor(np.log2(max(512, len(y)))))))
         hop_length = min(self.DEFAULT_HOP_LENGTH, max(128, frame_length // 4))
@@ -303,6 +304,7 @@ class LibrosaPyinPitchExtractor(PitchExtractionInterface):
             sr=sr,
             frame_length=frame_length,
             hop_length=hop_length,
+            resolution=resolution,
             fill_na=np.nan,
         )
 

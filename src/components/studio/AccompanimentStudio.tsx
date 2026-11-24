@@ -465,6 +465,10 @@ export function AccompanimentStudio({
     void submitJob("accompaniment_generation", undefined, {
       arrangement: arrangementConfig,
       mix_with_vocal: false,
+      ...(analysisResult ? { musical_analysis: analysisResult } : {}),
+      ...(analysisResult && (analysisResult as Record<string, unknown>).vocal_pitch
+        ? { vocal_pitch: (analysisResult as Record<string, unknown>).vocal_pitch }
+        : {}),
     });
   };
 
@@ -478,6 +482,10 @@ export function AccompanimentStudio({
           album: "SONORA AI Accompaniment Studio",
         },
       },
+      ...(analysisResult ? { musical_analysis: analysisResult } : {}),
+      ...(analysisResult && (analysisResult as Record<string, unknown>).vocal_pitch
+        ? { vocal_pitch: (analysisResult as Record<string, unknown>).vocal_pitch }
+        : {}),
     });
   };
 

@@ -130,6 +130,7 @@ class ProcessingEngineRegistry:
         workspace_dir: Path,
         *,
         artifact_tracker: JobArtifactTracker | None = None,
+        on_progress: Any | None = None,
     ) -> JobExecutionOutput:
         if job.job_type in self._custom_processors:
             _, handler = self._custom_processors[job.job_type]
@@ -138,17 +139,22 @@ class ProcessingEngineRegistry:
         if job.job_type == JobType.AUDIO_ANALYSIS:
             if self.analysis is None:
                 raise ModelNotIntegratedError(job.job_type.value, "AudioAnalysisInterface")
-            res = await self.analysis.analyze(decoded, job.parameters)
-            payload = res.model_dump(mode="json")
-            # Optional combined Run 1 workflow: include monophonic vocal pitch extraction in the same job
+            # Optional combined Run 1 workflow: run musical analysis and pitch extraction concurrently
             if job.parameters.get("include_vocal_pitch") is True and self.pitch is not None:
                 pitch_options = job.parameters.get("pitch_options")
-                pitch_res = await self.pitch.extract_pitch(
-                    decoded,
-                    mode="monophonic",
-                    options=pitch_options if isinstance(pitch_options, dict) else None,
+                res, pitch_res = await asyncio.gather(
+                    self.analysis.analyze(decoded, job.parameters),
+                    self.pitch.extract_pitch(
+                        decoded,
+                        mode="monophonic",
+                        options=pitch_options if isinstance(pitch_options, dict) else None,
+                    ),
                 )
+                payload = res.model_dump(mode="json")
                 payload["vocal_pitch"] = pitch_res.model_dump(mode="json")
+            else:
+                res = await self.analysis.analyze(decoded, job.parameters)
+                payload = res.model_dump(mode="json")
             return JobExecutionOutput(result=payload)
 
         if job.job_type == JobType.INSTRUMENT_DETECTION:
@@ -181,11 +187,14 @@ class ProcessingEngineRegistry:
         if job.job_type == JobType.ACCOMPANIMENT_GENERATION:
             if self.accompaniment is None:
                 raise ModelNotIntegratedError(job.job_type.value, "AccompanimentOrchestrator")
-            result_payload, artifacts = await self.accompaniment.generate(
+            include_mix = bool(job.parameters.get("mix_with_vocal") is True)
+            result_payload, artifacts = await self.accompaniment.generate_and_master(
                 job,
                 decoded,
                 workspace_dir,
+                include_mix_and_export=include_mix,
                 artifact_tracker=artifact_tracker,
+                on_progress=on_progress,
             )
             return JobExecutionOutput(result=result_payload, artifacts=artifacts)
 
@@ -198,6 +207,7 @@ class ProcessingEngineRegistry:
                 workspace_dir,
                 include_mix_and_export=True,
                 artifact_tracker=artifact_tracker,
+                on_progress=on_progress,
             )
             return JobExecutionOutput(result=result_payload, artifacts=artifacts)
 

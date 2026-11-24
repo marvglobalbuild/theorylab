@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Any
 
@@ -13,8 +14,10 @@ from app.processing.exporter import ExportMetadata
 from app.processing.instruments import InstrumentResourceManager
 from app.processing.interfaces import (
     AudioAnalysisInterface,
+    AudioAnalysisResult,
     DecodedAudio,
     PitchExtractionInterface,
+    PitchExtractionResult,
 )
 from app.processing.midi import (
     MIDITrackSpec,
@@ -165,6 +168,7 @@ class AccompanimentOrchestrator:
         *,
         include_mix_and_export: bool = True,
         artifact_tracker: JobArtifactTracker | None = None,
+        on_progress: Any | None = None,
     ) -> tuple[dict[str, Any], list[JobArtifactRef]]:
         config = self.parse_config(job.parameters)
 
@@ -200,18 +204,57 @@ class AccompanimentOrchestrator:
             if config.key_override:
                 analysis_res.estimated_key = config.key_override
         else:
-            # Standard Audio & Video pathway: Run 1 musical analysis + monophonic vocal pitch extraction
-            analysis_res = await self._analysis.analyze(
-                decoded,
-                options=analysis_opts if isinstance(analysis_opts, dict) else None,
-            )
-            pitch_res = await self._pitch.extract_pitch(
-                decoded,
-                mode="monophonic",
-                options=pitch_opts if isinstance(pitch_opts, dict) else None,
-            )
+            # Check for caller pre-computed analysis & pitch to eliminate redundant computation
+            raw_analysis = job.parameters.get("musical_analysis")
+            raw_pitch = job.parameters.get("vocal_pitch")
+            analysis_res: AudioAnalysisResult | None = None
+            pitch_res: PitchExtractionResult | None = None
+
+            if isinstance(raw_analysis, dict):
+                try:
+                    analysis_res = AudioAnalysisResult.model_validate(raw_analysis)
+                except Exception:
+                    analysis_res = None
+            if isinstance(raw_pitch, dict):
+                try:
+                    pitch_res = PitchExtractionResult.model_validate(raw_pitch)
+                except Exception:
+                    pitch_res = None
+
+            # Concurrently extract any missing components
+            if analysis_res is None and pitch_res is None:
+                if on_progress:
+                    await on_progress(45, "analyzing_vocals")
+                analysis_res, pitch_res = await asyncio.gather(
+                    self._analysis.analyze(
+                        decoded,
+                        options=analysis_opts if isinstance(analysis_opts, dict) else None,
+                    ),
+                    self._pitch.extract_pitch(
+                        decoded,
+                        mode="monophonic",
+                        options=pitch_opts if isinstance(pitch_opts, dict) else None,
+                    ),
+                )
+            elif analysis_res is None:
+                if on_progress:
+                    await on_progress(45, "detecting_key_and_tempo")
+                analysis_res = await self._analysis.analyze(
+                    decoded,
+                    options=analysis_opts if isinstance(analysis_opts, dict) else None,
+                )
+            elif pitch_res is None:
+                if on_progress:
+                    await on_progress(45, "analyzing_vocals")
+                pitch_res = await self._pitch.extract_pitch(
+                    decoded,
+                    mode="monophonic",
+                    options=pitch_opts if isinstance(pitch_opts, dict) else None,
+                )
 
         # Stage 3: Theory-driven accompaniment arrangement
+        if on_progress:
+            await on_progress(60, "arranging_instruments")
         plan = self._arranger.arrange(
             analysis=analysis_res,
             pitch=pitch_res,
@@ -260,6 +303,8 @@ class AccompanimentOrchestrator:
         )
 
         # Stage 5: Render multi-sampled stereo WAV via FluidSynth
+        if on_progress:
+            await on_progress(70, "rendering_accompaniment")
         wav_local_path = workspace_dir / "accompaniment.wav"
         synth_diag = await self._renderer.render_midi_to_wav(
             midi_path=midi_local_path,
@@ -320,7 +365,7 @@ class AccompanimentOrchestrator:
             )
         )
 
-        # Stage 6b: Render per-instrument stems when requested OR when stem-level mixing overrides are specified
+        # Stage 6b: Render per-instrument stems concurrently when requested or needed for mixing
         need_stems = bool(
             config.render_individual_stems
             or (
@@ -336,9 +381,12 @@ class AccompanimentOrchestrator:
         stem_summaries: list[dict[str, Any]] = []
         stem_local_paths: dict[str, Path] = {}
         if need_stems:
-            for track in plan.tracks:
+            if on_progress:
+                await on_progress(82, "rendering_stems")
+
+            async def _render_single_stem(track: MIDITrackSpec):
                 if not track.notes:
-                    continue
+                    return None
                 stem_midi = workspace_dir / f"stem_{track.instrument_id}.mid"
                 stem_wav = workspace_dir / f"stem_{track.instrument_id}.wav"
                 await self._midi.build_multitrack_midi(
@@ -352,7 +400,6 @@ class AccompanimentOrchestrator:
                     midi_path=stem_midi,
                     output_wav_path=stem_wav,
                 )
-                stem_local_paths[track.instrument_id] = stem_wav
                 stem_obj_path = UserStoragePathGuard.normalize_and_verify(
                     user_id=job.user_id,
                     bucket=bucket,
@@ -367,29 +414,35 @@ class AccompanimentOrchestrator:
                 )
                 if artifact_tracker is not None:
                     artifact_tracker.record_upload(bucket, stem_stored.object_path)
-                artifacts.append(
-                    JobArtifactRef(
-                        artifact_type=f"instrument_track_{track.instrument_id}",
-                        storage_backend=self._settings.music_engine_storage_backend,
-                        bucket=bucket,
-                        object_path=stem_stored.object_path,
-                        mime_type="audio/wav",
-                        size_bytes=stem_stored.size_bytes,
-                    )
+                art_ref = JobArtifactRef(
+                    artifact_type=f"instrument_track_{track.instrument_id}",
+                    storage_backend=self._settings.music_engine_storage_backend,
+                    bucket=bucket,
+                    object_path=stem_stored.object_path,
+                    mime_type="audio/wav",
+                    size_bytes=stem_stored.size_bytes,
                 )
-                stem_summaries.append(
-                    {
-                        "instrument_id": track.instrument_id,
-                        "track_name": track.track_name,
-                        "gm_program": track.gm_program,
-                        "channel": track.channel,
-                        "object_path": stem_stored.object_path,
-                        "duration_ms": stem_diag.duration_ms,
-                        "peak_amplitude": stem_diag.peak_amplitude,
-                        "rms_amplitude": stem_diag.rms_amplitude,
-                        "size_bytes": stem_stored.size_bytes,
-                    }
-                )
+                summary = {
+                    "instrument_id": track.instrument_id,
+                    "track_name": track.track_name,
+                    "gm_program": track.gm_program,
+                    "channel": track.channel,
+                    "object_path": stem_stored.object_path,
+                    "duration_ms": stem_diag.duration_ms,
+                    "peak_amplitude": stem_diag.peak_amplitude,
+                    "rms_amplitude": stem_diag.rms_amplitude,
+                    "size_bytes": stem_stored.size_bytes,
+                }
+                return track.instrument_id, stem_wav, art_ref, summary
+
+            stem_tasks = [_render_single_stem(track) for track in plan.tracks if track.notes]
+            stem_results = await asyncio.gather(*stem_tasks)
+            for res in stem_results:
+                if res is not None:
+                    inst_id, stem_wav, art_ref, summary = res
+                    stem_local_paths[inst_id] = stem_wav
+                    artifacts.append(art_ref)
+                    stem_summaries.append(summary)
 
         # Stage 7 (Run 3): Non-destructive vocal + accompaniment mixing, mastering & format export
         mixing_payload: dict[str, Any] | None = None
@@ -398,6 +451,8 @@ class AccompanimentOrchestrator:
         original_vocal_copy_obj_path: str | None = None
 
         if include_mix_and_export and mix_config is not None and self._mixer is not None:
+            if on_progress:
+                await on_progress(90, "mastering_audio")
             exports_dir = workspace_dir / "exports"
             mix_res = await self._mixer.mix_vocal_and_accompaniment(
                 vocal_path=Path(decoded.working_wav_path),

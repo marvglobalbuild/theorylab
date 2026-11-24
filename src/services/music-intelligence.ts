@@ -148,9 +148,10 @@ export function validateMusicEngineUrl(rawUrl: unknown): MusicEngineUrlValidatio
 
 export function getMusicEngineBaseUrl(env?: MusicEngineEnvInput): string | null {
   const raw =
-    env?.VITE_MUSIC_ENGINE_URL ??
-    import.meta.env.VITE_MUSIC_ENGINE_URL ??
-    (typeof process !== "undefined" ? process.env?.VITE_MUSIC_ENGINE_URL : undefined);
+    env !== undefined
+      ? env.VITE_MUSIC_ENGINE_URL
+      : (import.meta.env.VITE_MUSIC_ENGINE_URL ??
+         (typeof process !== "undefined" ? process.env?.VITE_MUSIC_ENGINE_URL : undefined));
   return validateMusicEngineUrl(raw).url;
 }
 
@@ -306,43 +307,94 @@ interface BackendErrorEnvelope {
     retryable?: unknown;
     details?: unknown;
   };
+  detail?: unknown;
+  message?: unknown;
+}
+
+function extractStructuredErrorInfo(
+  body: unknown,
+  status: number,
+  fallbackContext: "upload" | "request",
+): {
+  code: string;
+  message: string;
+  retryable: boolean;
+  details?: Record<string, unknown>;
+} {
+  let code = `HTTP_${status}`;
+  let message =
+    fallbackContext === "upload"
+      ? `Audio upload failed with HTTP ${status}.`
+      : `Music Intelligence Engine request failed with HTTP ${status}.`;
+  let retryable = status >= 500 || status === 429;
+  let details: Record<string, unknown> | undefined;
+
+  if (body && typeof body === "object") {
+    const record = body as BackendErrorEnvelope;
+    if (record.error && typeof record.error === "object") {
+      if (typeof record.error.code === "string" && record.error.code.trim()) {
+        code = record.error.code;
+      }
+      if (typeof record.error.message === "string" && record.error.message.trim()) {
+        message = record.error.message;
+      }
+      if (typeof record.error.retryable === "boolean") {
+        retryable = record.error.retryable;
+      }
+      if (record.error.details && typeof record.error.details === "object") {
+        details = record.error.details as Record<string, unknown>;
+      }
+    } else if (record.detail !== undefined) {
+      if (typeof record.detail === "string" && record.detail.trim()) {
+        message = record.detail.trim();
+        if (message.toLowerCase().includes("boundary")) {
+          code = "MALFORMED_MULTIPART_UPLOAD";
+          message =
+            "The upload request was rejected because the multipart boundary was missing or malformed. Please re-select the file and try again.";
+        }
+      } else if (Array.isArray(record.detail)) {
+        code = "REQUEST_VALIDATION_ERROR";
+        const msgs = record.detail
+          .map((item) =>
+            typeof item === "object" && item && "msg" in item ? String(item.msg) : "",
+          )
+          .filter(Boolean);
+        if (msgs.length > 0) {
+          message = `Validation error: ${msgs.join("; ")}`;
+        }
+      }
+    } else if (typeof record.message === "string" && record.message.trim()) {
+      message = record.message.trim();
+    }
+  }
+
+  // If HTTP 400 and message is still generic, provide actionable guidance
+  if (status === 400 && code === "HTTP_400") {
+    message =
+      "The upload request was rejected by the server (HTTP 400 Bad Request). Please verify that the file is not corrupted and try re-uploading.";
+  }
+
+  return { code, message, retryable, ...(details ? { details } : {}) };
 }
 
 async function parseErrorResponse(
   response: Response,
 ): Promise<Extract<MusicIntelligenceResult<never>, { status: "error" }>> {
-  let code = `HTTP_${response.status}`;
-  let message = `Music Intelligence Engine request failed with HTTP ${response.status}.`;
-  let retryable = response.status >= 500 || response.status === 429;
-  let details: Record<string, unknown> | undefined;
-
+  let body: unknown;
   try {
-    const body = (await response.json()) as BackendErrorEnvelope;
-    if (body?.error && typeof body.error === "object") {
-      if (typeof body.error.code === "string" && body.error.code.trim()) {
-        code = body.error.code;
-      }
-      if (typeof body.error.message === "string" && body.error.message.trim()) {
-        message = body.error.message;
-      }
-      if (typeof body.error.retryable === "boolean") {
-        retryable = body.error.retryable;
-      }
-      if (body.error.details && typeof body.error.details === "object") {
-        details = body.error.details as Record<string, unknown>;
-      }
-    }
+    body = await response.json();
   } catch {
-    // Non-JSON error response; keep HTTP status fallback message
+    // Non-JSON error response; keep fallback message
   }
 
+  const extracted = extractStructuredErrorInfo(body, response.status, "request");
   return {
     status: "error",
-    code,
-    message,
+    code: extracted.code,
+    message: extracted.message,
     httpStatus: response.status,
-    retryable,
-    ...(details ? { details } : {}),
+    retryable: extracted.retryable,
+    ...(extracted.details ? { details: extracted.details } : {}),
   };
 }
 
@@ -433,13 +485,22 @@ export function createMusicIntelligenceService(
       headers["Authorization"] = `Bearer ${auth.token}`;
     }
 
+    const mergedHeaders: Record<string, string> = {
+      ...headers,
+      ...(init.headers as Record<string, string> | undefined),
+    };
+    if (isFormData) {
+      for (const key of Object.keys(mergedHeaders)) {
+        if (key.toLowerCase() === "content-type") {
+          delete mergedHeaders[key];
+        }
+      }
+    }
+
     try {
       const response = await fetchFn(`${baseUrl}${path}`, {
         ...init,
-        headers: {
-          ...headers,
-          ...(init.headers as Record<string, string> | undefined),
-        },
+        headers: mergedHeaders,
       });
 
       if (!response.ok) {
@@ -538,30 +599,20 @@ export function createMusicIntelligenceService(
               return;
             }
 
-            let code = `HTTP_${xhr.status}`;
-            let message = `Audio upload failed with HTTP ${xhr.status}.`;
-            let retryable = xhr.status >= 500 || xhr.status === 429;
-            let details: Record<string, unknown> | undefined;
+            let body: unknown;
             try {
-              const body = JSON.parse(xhr.responseText) as BackendErrorEnvelope;
-              if (body?.error && typeof body.error === "object") {
-                if (typeof body.error.code === "string") code = body.error.code;
-                if (typeof body.error.message === "string") message = body.error.message;
-                if (typeof body.error.retryable === "boolean") retryable = body.error.retryable;
-                if (body.error.details && typeof body.error.details === "object") {
-                  details = body.error.details as Record<string, unknown>;
-                }
-              }
+              body = JSON.parse(xhr.responseText);
             } catch {
-              // Ignore parse failure
+              // Ignore non-JSON response
             }
+            const extracted = extractStructuredErrorInfo(body, xhr.status, "upload");
             resolve({
               status: "error",
-              code,
-              message,
+              code: extracted.code,
+              message: extracted.message,
               httpStatus: xhr.status,
-              retryable,
-              ...(details ? { details } : {}),
+              retryable: extracted.retryable,
+              ...(extracted.details ? { details: extracted.details } : {}),
             });
           };
 

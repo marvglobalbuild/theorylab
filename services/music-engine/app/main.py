@@ -9,6 +9,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.routes import audio, capabilities, health, jobs
 from app.core.config import Settings, get_settings
@@ -155,6 +156,39 @@ def create_app(
             status_code=422,
             content=envelope.model_dump(mode="json"),
         )
+
+    @app.exception_handler(StarletteHTTPException)
+    async def handle_http_exception(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+        request_id = getattr(request.state, "request_id", None)
+        detail_str = str(exc.detail) if exc.detail else "HTTP request error."
+        logger.warning(
+            "HTTP exception occurred: %s (status=%d)",
+            detail_str,
+            exc.status_code,
+            extra={"request_id": request_id, "status_code": exc.status_code, "detail": exc.detail},
+        )
+        code = f"HTTP_{exc.status_code}"
+        message = detail_str
+        if exc.status_code == 400 and "boundary" in detail_str.lower():
+            code = "MALFORMED_MULTIPART_UPLOAD"
+            message = (
+                "The media upload request was rejected because the multipart form boundary was missing or invalid. "
+                "Please verify your file and try re-uploading."
+            )
+        elif exc.status_code == 400:
+            code = "BAD_REQUEST"
+            message = detail_str
+
+        envelope = ErrorEnvelope(
+            error=ErrorDetail(
+                code=code,
+                message=message,
+                retryable=False,
+                details={"detail": exc.detail},
+            ),
+            request_id=request_id,
+        )
+        return JSONResponse(status_code=exc.status_code, content=envelope.model_dump(mode="json"))
 
     @app.exception_handler(Exception)
     async def handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:

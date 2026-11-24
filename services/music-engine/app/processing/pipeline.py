@@ -154,11 +154,23 @@ class ProcessingPipeline:
             )
             current = await save(current)
 
+            async def _on_stage_progress(percent: int, stage_name: str) -> None:
+                nonlocal current
+                current = current.model_copy(
+                    update={
+                        "progress_percent": percent,
+                        "stage": stage_name,
+                        "updated_at": datetime.now(timezone.utc),
+                    }
+                )
+                current = await save(current)
+
             output = await self._registry.execute_job_stage(
                 current,
                 decoded,
                 workspace_dir,
                 artifact_tracker=artifact_tracker,
+                on_progress=_on_stage_progress,
             )
             for ref in output.artifacts:
                 artifact_tracker.record_upload(ref.bucket, ref.object_path)

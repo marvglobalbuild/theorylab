@@ -225,6 +225,12 @@ export function humanizeJobStage(stage: string): string {
   if (stage === "queued") return "Queued for worker";
   if (stage.startsWith("ingesting_audio")) return "Verifying & staging original vocal";
   if (stage === "decoding_audio") return "Decoding canonical 44.1 kHz PCM";
+  if (stage === "analyzing_vocals") return "Analysing vocal melody & pitch";
+  if (stage === "detecting_key_and_tempo") return "Detecting musical key, scale & tempo";
+  if (stage === "arranging_instruments") return "Arranging multi-part accompaniment";
+  if (stage === "rendering_accompaniment") return "Synthesizing instruments via FluidSynth";
+  if (stage === "rendering_stems") return "Rendering multi-track instrument stems in parallel";
+  if (stage === "mastering_audio") return "Mixing & mastering loudness (ITU-R BS.1770-4)";
   if (stage === "executing_audio_analysis") return "Analysing key, tempo, chords & vocal pitch";
   if (stage === "executing_accompaniment_generation")
     return "Arranging harmony, generating MIDI & synthesizing instruments";

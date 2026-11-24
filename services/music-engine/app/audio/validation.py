@@ -73,9 +73,15 @@ def sniff_audio_format_from_bytes(header: bytes, filename: str | None = None) ->
     Inspects magic bytes at the start of a file to verify it is a genuine audio, video,
     or MIDI container and reject disguised non-media payloads (HTML, JSON, executables).
     """
+    if len(header) == 0:
+        raise AudioValidationError(
+            "Media file is empty (0 bytes).",
+            code="EMPTY_AUDIO_FILE",
+            details={"bytes_read": 0},
+        )
     if len(header) < 4:
         raise AudioValidationError(
-            "Media file is empty or truncated and cannot be decoded.",
+            "Media file is truncated and cannot be decoded.",
             code="CORRUPTED_OR_EMPTY_AUDIO",
             details={"bytes_read": len(header)},
         )
@@ -135,10 +141,6 @@ def sniff_audio_format_from_bytes(header: bytes, filename: str | None = None) ->
         if layer_bits == 0:
             return AudioFormat.AAC
         return AudioFormat.MP3
-
-    # If magic bytes match known extension hint when valid
-    if ext_hint in EXTENSION_TO_FORMAT:
-        return EXTENSION_TO_FORMAT[ext_hint]
 
     raise AudioValidationError(
         "File header does not match any supported audio, video, or MIDI format "
