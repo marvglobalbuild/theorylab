@@ -81,6 +81,7 @@ def build_registry(settings: Settings, storage: StorageAdapter) -> ProcessingEng
         mixing=mixer,
         instruments=instruments,
         accompaniment=accompaniment,
+        storage=storage,
     )
 
 

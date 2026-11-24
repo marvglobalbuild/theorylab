@@ -42,6 +42,18 @@ class AccessDeniedError(MusicEngineError):
         super().__init__(code=code, message=message, status_code=403, details=details, retryable=False)
 
 
+class AccountStatusUnavailableError(MusicEngineError):
+    """Raised when the account-status verification service is unreachable or returns an invalid response."""
+
+    def __init__(
+        self,
+        message: str = "Unable to verify account status right now. Please try again shortly.",
+        code: str = "ACCOUNT_STATUS_UNAVAILABLE",
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(code=code, message=message, status_code=503, details=details, retryable=True)
+
+
 class ResourceNotFoundError(MusicEngineError):
     def __init__(
         self,

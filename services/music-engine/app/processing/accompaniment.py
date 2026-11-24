@@ -8,6 +8,7 @@ from pydantic import ValidationError as PydanticValidationError
 from app.core.config import Settings
 from app.core.errors import MixingError, ValidationError
 from app.processing.arranger import ArrangementConfig, SonoraAccompanimentArranger
+from app.processing.artifacts import JobArtifactTracker
 from app.processing.exporter import ExportMetadata
 from app.processing.instruments import InstrumentResourceManager
 from app.processing.interfaces import (
@@ -138,6 +139,8 @@ class AccompanimentOrchestrator:
         job: JobResponse,
         decoded: DecodedAudio,
         workspace_dir: Path,
+        *,
+        artifact_tracker: JobArtifactTracker | None = None,
     ) -> tuple[dict[str, Any], list[JobArtifactRef]]:
         """Run 2 accompaniment workflow (optionally includes Run 3 mix if `mix_with_vocal: true`)."""
         include_mix = bool(job.parameters.get("mix_with_vocal") is True)
@@ -146,6 +149,7 @@ class AccompanimentOrchestrator:
             decoded,
             workspace_dir,
             include_mix_and_export=include_mix,
+            artifact_tracker=artifact_tracker,
         )
 
     async def generate_and_master(
@@ -155,6 +159,7 @@ class AccompanimentOrchestrator:
         workspace_dir: Path,
         *,
         include_mix_and_export: bool = True,
+        artifact_tracker: JobArtifactTracker | None = None,
     ) -> tuple[dict[str, Any], list[JobArtifactRef]]:
         config = self.parse_config(job.parameters)
 
@@ -226,6 +231,8 @@ class AccompanimentOrchestrator:
             source=midi_local_path,
             content_type="audio/midi",
         )
+        if artifact_tracker is not None:
+            artifact_tracker.record_upload(bucket, midi_stored.object_path)
         artifacts.append(
             JobArtifactRef(
                 artifact_type="accompaniment_midi",
@@ -249,6 +256,8 @@ class AccompanimentOrchestrator:
             source=wav_local_path,
             content_type="audio/wav",
         )
+        if artifact_tracker is not None:
+            artifact_tracker.record_upload(bucket, wav_stored.object_path)
         artifacts.append(
             JobArtifactRef(
                 artifact_type="accompaniment_audio",
@@ -305,6 +314,8 @@ class AccompanimentOrchestrator:
                     source=stem_wav,
                     content_type="audio/wav",
                 )
+                if artifact_tracker is not None:
+                    artifact_tracker.record_upload(bucket, stem_stored.object_path)
                 artifacts.append(
                     JobArtifactRef(
                         artifact_type=f"instrument_track_{track.instrument_id}",
@@ -359,6 +370,8 @@ class AccompanimentOrchestrator:
                     source=Path(exp.output_path),
                     content_type=exp.mime_type,
                 )
+                if artifact_tracker is not None:
+                    artifact_tracker.record_upload(bucket, master_stored.object_path)
                 artifacts.append(
                     JobArtifactRef(
                         artifact_type=f"master_audio_{exp.format.value}",
@@ -402,6 +415,8 @@ class AccompanimentOrchestrator:
                     source=Path(decoded.working_wav_path),
                     content_type="audio/wav",
                 )
+                if artifact_tracker is not None:
+                    artifact_tracker.record_upload(bucket, vocal_copy_stored.object_path)
                 original_vocal_copy_obj_path = vocal_copy_stored.object_path
                 artifacts.append(
                     JobArtifactRef(

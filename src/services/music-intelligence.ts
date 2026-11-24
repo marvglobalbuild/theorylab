@@ -55,6 +55,14 @@ export interface MusicEngineEnvInput {
   VITE_MUSIC_ENGINE_URL?: string | undefined;
 }
 
+export type MusicEngineUrlValidationReason = "missing" | "invalid_url" | "supabase_url_rejected";
+
+export interface MusicEngineUrlValidationResult {
+  configured: boolean;
+  url: string | null;
+  reason: MusicEngineUrlValidationReason | null;
+}
+
 export interface AudioFilePrevalidationResult {
   valid: boolean;
   code?: string;
@@ -62,18 +70,43 @@ export interface AudioFilePrevalidationResult {
   sanitizedFilename?: string;
 }
 
-export function getMusicEngineBaseUrl(env?: MusicEngineEnvInput): string | null {
-  const raw = env ? env.VITE_MUSIC_ENGINE_URL : import.meta.env["VITE_MUSIC_ENGINE_URL"];
-  if (typeof raw !== "string") return null;
-  const trimmed = raw.trim().replace(/\/+$/, "");
-  if (!trimmed) return null;
+function isSupabaseProjectHostname(hostname: string): boolean {
+  const normalized = hostname.trim().toLowerCase().replace(/\.+$/, "");
+  return normalized === "supabase.co" || normalized.endsWith(".supabase.co");
+}
+
+/**
+ * Centralized validation for the Music Intelligence Engine base URL.
+ * Treats missing, empty, malformed, or Supabase project (*.supabase.co) URLs as unconfigured
+ * without silently substituting any other endpoint.
+ */
+export function validateMusicEngineUrl(rawUrl: unknown): MusicEngineUrlValidationResult {
+  if (typeof rawUrl !== "string") {
+    return { configured: false, url: null, reason: "missing" };
+  }
+
+  const trimmed = rawUrl.trim().replace(/\/+$/, "");
+  if (!trimmed) {
+    return { configured: false, url: null, reason: "missing" };
+  }
+
   try {
     const parsed = new URL(trimmed);
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
-    return trimmed;
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return { configured: false, url: null, reason: "invalid_url" };
+    }
+    if (isSupabaseProjectHostname(parsed.hostname)) {
+      return { configured: false, url: null, reason: "supabase_url_rejected" };
+    }
+    return { configured: true, url: trimmed, reason: null };
   } catch {
-    return null;
+    return { configured: false, url: null, reason: "invalid_url" };
   }
+}
+
+export function getMusicEngineBaseUrl(env?: MusicEngineEnvInput): string | null {
+  const raw = env ? env.VITE_MUSIC_ENGINE_URL : import.meta.env["VITE_MUSIC_ENGINE_URL"];
+  return validateMusicEngineUrl(raw).url;
 }
 
 export function sanitizeAudioFilename(filename: string): string {
@@ -247,7 +280,9 @@ export function createMusicIntelligenceService(
   options: MusicIntelligenceClientOptions = {},
 ): MusicIntelligenceService {
   const resolveBaseUrl = () =>
-    options.baseUrl !== undefined ? options.baseUrl : getMusicEngineBaseUrl();
+    options.baseUrl !== undefined
+      ? validateMusicEngineUrl(options.baseUrl).url
+      : getMusicEngineBaseUrl();
   const getClient = options.getClient ?? (() => supabase);
   const fetchFn = options.fetchImpl ?? globalThis.fetch;
 

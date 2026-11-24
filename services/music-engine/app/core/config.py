@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     music_engine_cancel_signal_ttl_seconds: int = Field(default=86400, ge=60, le=604800)
     music_engine_stale_workspace_max_age_seconds: int = Field(default=3600, ge=1)
     music_engine_stale_job_timeout_seconds: int = Field(default=900, ge=1)
+    music_engine_stale_queued_job_timeout_seconds: int = Field(default=600, ge=1)
 
     # Optional explicit binaries & verified SoundFont synthesis resources
     ffmpeg_bin: str = Field(default_factory=lambda: shutil.which("ffmpeg") or "ffmpeg")
@@ -76,6 +77,7 @@ class Settings(BaseSettings):
     supabase_publishable_key: str = ""
     supabase_service_role_key: str = ""
     supabase_jwt_secret: str = ""
+    supabase_jwt_verification_mode: Literal["auto", "remote", "hs256"] = "auto"
     supabase_jwt_audience: str = "authenticated"
     supabase_audio_bucket: str = "sonora-audio"
     supabase_jobs_table: str = "processing_jobs"

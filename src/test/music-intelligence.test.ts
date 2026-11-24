@@ -1,11 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it, vi } from "vitest";
 
+import { createSupabaseClientFromEnv, getSupabaseConfigStatus } from "@/lib/supabase";
 import {
   buildUserAudioObjectPath,
   createMusicIntelligenceService,
   getMusicEngineBaseUrl,
   validateAudioFileForUpload,
+  validateMusicEngineUrl,
 } from "@/services/music-intelligence";
 
 function createMockSupabaseWithToken(accessToken: string | null): SupabaseClient {
@@ -22,10 +24,33 @@ function createMockSupabaseWithToken(accessToken: string | null): SupabaseClient
 }
 
 describe("Music Intelligence Engine frontend contract & client", () => {
-  it("reports unavailable when VITE_MUSIC_ENGINE_URL is not configured", async () => {
-    expect(getMusicEngineBaseUrl({ VITE_MUSIC_ENGINE_URL: "" })).toBeNull();
+  it("reports unavailable when VITE_MUSIC_ENGINE_URL is missing or empty", async () => {
+    expect(validateMusicEngineUrl(undefined)).toEqual({
+      configured: false,
+      url: null,
+      reason: "missing",
+    });
+    expect(validateMusicEngineUrl("")).toEqual({
+      configured: false,
+      url: null,
+      reason: "missing",
+    });
+    expect(validateMusicEngineUrl("   ")).toEqual({
+      configured: false,
+      url: null,
+      reason: "missing",
+    });
 
-    const service = createMusicIntelligenceService({ baseUrl: null });
+    expect(getMusicEngineBaseUrl({})).toBeNull();
+    expect(getMusicEngineBaseUrl({ VITE_MUSIC_ENGINE_URL: undefined })).toBeNull();
+    expect(getMusicEngineBaseUrl({ VITE_MUSIC_ENGINE_URL: "" })).toBeNull();
+    expect(getMusicEngineBaseUrl({ VITE_MUSIC_ENGINE_URL: "   " })).toBeNull();
+
+    const fetchSpy = vi.fn();
+    const service = createMusicIntelligenceService({
+      baseUrl: null,
+      fetchImpl: fetchSpy as unknown as typeof fetch,
+    });
     expect(service.isConfigured()).toBe(false);
 
     const healthRes = await service.getHealth();
@@ -43,6 +68,81 @@ describe("Music Intelligence Engine frontend contract & client", () => {
       },
     });
     expect(jobRes.status).toBe("unavailable");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects Supabase project URLs (*.supabase.co) as invalid Music Engine endpoints without issuing network requests", async () => {
+    const supabaseUrls = [
+      "https://pyxtpaozggpcswdkehwb.supabase.co/",
+      "https://pyxtpaozggpcswdkehwb.supabase.co",
+      "https://PYXTPAOZGGPCSWDKEHWB.SUPABASE.CO/rest/v1",
+      "https://db.pyxtpaozggpcswdkehwb.supabase.co/",
+      "https://supabase.co/",
+    ];
+
+    for (const candidate of supabaseUrls) {
+      expect(validateMusicEngineUrl(candidate)).toEqual({
+        configured: false,
+        url: null,
+        reason: "supabase_url_rejected",
+      });
+      expect(getMusicEngineBaseUrl({ VITE_MUSIC_ENGINE_URL: candidate })).toBeNull();
+    }
+
+    const fetchSpy = vi.fn();
+    const service = createMusicIntelligenceService({
+      baseUrl: "https://pyxtpaozggpcswdkehwb.supabase.co/",
+      getClient: () => createMockSupabaseWithToken("supa-jwt-token"),
+      fetchImpl: fetchSpy as unknown as typeof fetch,
+    });
+
+    expect(service.isConfigured()).toBe(false);
+    expect((await service.getHealth()).status).toBe("unavailable");
+    expect((await service.getCapabilities()).status).toBe("unavailable");
+    expect((await service.getInstruments()).status).toBe("unavailable");
+    expect((await service.listJobs()).status).toBe("unavailable");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("preserves valid independent HTTPS Music Engine URLs and leaves Supabase auth config unaffected", async () => {
+    const validEngineUrl = "https://music-engine.sonora-audio.example.com/";
+    expect(validateMusicEngineUrl(validEngineUrl)).toEqual({
+      configured: true,
+      url: "https://music-engine.sonora-audio.example.com",
+      reason: null,
+    });
+    expect(getMusicEngineBaseUrl({ VITE_MUSIC_ENGINE_URL: validEngineUrl })).toBe(
+      "https://music-engine.sonora-audio.example.com",
+    );
+
+    const fetchSpy = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ status: "ok" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+    const service = createMusicIntelligenceService({
+      baseUrl: validEngineUrl,
+      fetchImpl: fetchSpy as unknown as typeof fetch,
+    });
+
+    expect(service.isConfigured()).toBe(true);
+    const healthRes = await service.getHealth();
+    expect(healthRes.status).toBe("ok");
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "https://music-engine.sonora-audio.example.com/health",
+      expect.objectContaining({ method: "GET" }),
+    );
+
+    // Supabase authentication configuration remains unaffected by rejecting *.supabase.co for the Music Engine
+    const supaEnv = {
+      VITE_SUPABASE_URL: "https://pyxtpaozggpcswdkehwb.supabase.co",
+      VITE_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_public_example_key",
+    };
+    expect(getSupabaseConfigStatus(supaEnv).configured).toBe(true);
+    expect(createSupabaseClientFromEnv(supaEnv)).not.toBeNull();
+    expect(getMusicEngineBaseUrl({ VITE_MUSIC_ENGINE_URL: supaEnv.VITE_SUPABASE_URL })).toBeNull();
   });
 
   it("validates audio upload files and builds user-isolated storage paths", () => {

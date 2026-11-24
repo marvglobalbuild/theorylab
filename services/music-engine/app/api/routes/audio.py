@@ -165,15 +165,33 @@ async def upload_private_audio(
         )
         try:
             persisted_asset = await asset_repo.create_or_get(asset_record)
-        except Exception:
-            logger.warning(
-                "Uploaded audio bytes to private storage but failed to persist public.audio_assets row",
-                extra={
-                    "user_id": current_user.id,
-                    "asset_id": asset_id,
-                    "object_path": stored.object_path,
-                },
-            )
+        except Exception as persist_exc:
+            rollback_deleted: bool | None = None
+            rollback_error_type: str | None = None
+            try:
+                rollback_deleted = await storage.delete_object(bucket, stored.object_path)
+            except Exception as cleanup_exc:
+                rollback_error_type = type(cleanup_exc).__name__
+
+            log_extra = {
+                "user_id": current_user.id,
+                "asset_id": asset_id,
+                "object_path": stored.object_path,
+                "error_type": type(persist_exc).__name__,
+                "rollback_deleted": rollback_deleted,
+                "rollback_error_type": rollback_error_type,
+            }
+            if rollback_error_type is not None:
+                logger.error(
+                    "Metadata persistence failed after storage upload and storage rollback also failed",
+                    extra=log_extra,
+                )
+            else:
+                logger.warning(
+                    "Metadata persistence failed after storage upload; rolled back uploaded object (deleted=%s)",
+                    rollback_deleted,
+                    extra=log_extra,
+                )
             raise
 
         backend_type = (

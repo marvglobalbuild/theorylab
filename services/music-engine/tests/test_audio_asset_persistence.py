@@ -19,6 +19,7 @@ from app.jobs.assets import (
 )
 from app.jobs.repository import SupabaseJobRepository
 from app.main import create_app
+from app.security.auth import SupabaseAuthVerifier
 from app.storage.local_storage import LocalFilesystemStorageAdapter
 from tests.conftest import TEST_JWT_SECRET, USER_A_ID, USER_B_ID, generate_sine_wav, make_jwt
 
@@ -176,6 +177,9 @@ def test_upload_persists_audio_asset_before_supabase_processing_job_fk_and_trigg
     write_sequence: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET" and request.url.path == "/rest/v1/profiles":
+            return httpx.Response(200, json=[{"id": USER_A_ID, "account_status": "active"}])
+
         if request.method == "POST" and request.url.path == "/rest/v1/audio_assets":
             row = json.loads(request.content.decode("utf-8"))
             # Verify all critical migration 0002 check constraints
@@ -265,11 +269,13 @@ def test_upload_persists_audio_asset_before_supabase_processing_job_fk_and_trigg
     storage = LocalFilesystemStorageAdapter(settings.local_storage_path)
     asset_repo = SupabaseAudioAssetRepository(settings, http_client=http_client)
     job_repo = SupabaseJobRepository(settings, http_client=http_client)
+    auth_verifier = SupabaseAuthVerifier(settings, http_client=http_client)
     app = create_app(
         settings=settings,
         storage=storage,
         repository=job_repo,
         asset_repository=asset_repo,
+        auth_verifier=auth_verifier,
     )
 
     wav_path = generate_sine_wav(tmp_path / "persisted_vocal.wav", duration_sec=0.8)

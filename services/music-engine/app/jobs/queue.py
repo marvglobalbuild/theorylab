@@ -6,7 +6,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from arq.connections import ArqRedis, RedisSettings, create_pool
-from arq.jobs import Job as ArqJob
+from arq.jobs import Job as ArqJob, JobStatus as ArqJobStatus
 
 from app.core.config import Settings
 from app.core.errors import QueueIntegrationError
@@ -74,6 +74,13 @@ class JobQueueBackend(ABC):
 
     async def clear_cancel_signal(self, job_id: str) -> None:
         """Optional cleanup after terminal job completion."""
+
+    @abstractmethod
+    async def has_pending_job(self, job_id: str) -> bool:
+        """
+        Returns True if `job_id` is still queued, deferred, or actively in progress in the
+        queue backend. Raises QueueIntegrationError if queue status cannot be verified.
+        """
 
     @abstractmethod
     def active_job_count(self) -> int:
@@ -157,6 +164,10 @@ class InProcessQueueBackend(JobQueueBackend):
 
     async def clear_cancel_signal(self, job_id: str) -> None:
         self._cancel_flags.discard(job_id)
+
+    async def has_pending_job(self, job_id: str) -> bool:
+        task = self._tasks.get(job_id)
+        return task is not None and not task.done()
 
     def active_job_count(self) -> int:
         return sum(1 for task in self._tasks.values() if not task.done())
@@ -312,6 +323,46 @@ class ArqRedisQueueBackend(JobQueueBackend):
             await pool.delete(cancel_signal_key(job_id))
         except Exception:
             pass
+
+    async def has_pending_job(self, job_id: str) -> bool:
+        pool = await self._get_pool()
+        dispatch_id = arq_job_key(job_id)
+        try:
+            custom_check = getattr(pool, "has_pending_job", None)
+            if callable(custom_check):
+                result = custom_check(dispatch_id, self._settings.music_engine_arq_queue_name)
+                if asyncio.iscoroutine(result):
+                    result = await result
+                return bool(result)
+
+            # Standard ARQ/Redis inspection using arq.jobs.Job.status() (uses Redis pipeline)
+            if hasattr(pool, "pipeline"):
+                arq_job = ArqJob(
+                    dispatch_id,
+                    pool,
+                    _queue_name=self._settings.music_engine_arq_queue_name,
+                )
+                status = await arq_job.status()
+                return status in (
+                    ArqJobStatus.queued,
+                    ArqJobStatus.deferred,
+                    ArqJobStatus.in_progress,
+                )
+
+            # Lightweight in-memory pool test double fallback (e.g., FakeArqPool)
+            seen = getattr(pool, "seen_job_ids", None)
+            if isinstance(seen, set):
+                return dispatch_id in seen
+            return False
+        except QueueIntegrationError:
+            raise
+        except Exception as exc:
+            raise QueueIntegrationError(
+                f"Failed to inspect ARQ queue state for job '{job_id}' ({type(exc).__name__}).",
+                code="QUEUE_INSPECTION_FAILED",
+                status_code=503,
+                retryable=True,
+            ) from exc
 
     def active_job_count(self) -> int:
         # Web processes do not host audio execution tasks when using ARQ

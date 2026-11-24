@@ -10,6 +10,48 @@ from app.core.errors import AccessDeniedError, ValidationError
 _SAFE_SEGMENT_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
 
+def validate_storage_object_path(bucket: str, object_path: str) -> tuple[str, str]:
+    """
+    Validates bucket and object_path syntax for any storage operation (especially deletion).
+    Prevents empty/root paths, path traversal (`..`), backslashes, null bytes, and unsafe segments.
+    """
+    clean_bucket = bucket.strip()
+    if (
+        not clean_bucket
+        or "/" in clean_bucket
+        or "\\" in clean_bucket
+        or "\x00" in clean_bucket
+        or clean_bucket in (".", "..")
+        or not _SAFE_SEGMENT_RE.match(clean_bucket)
+    ):
+        raise ValidationError(
+            "Invalid storage bucket name.",
+            code="INVALID_STORAGE_PATH",
+        )
+
+    raw = object_path.strip()
+    if not raw or raw.startswith("/") or raw.startswith("\\") or "\x00" in raw or "\\" in raw:
+        raise ValidationError(
+            "Invalid storage object_path format.",
+            code="INVALID_STORAGE_PATH",
+        )
+
+    segments = raw.split("/")
+    if any(seg in ("", ".", "..") or not _SAFE_SEGMENT_RE.match(seg) for seg in segments):
+        raise ValidationError(
+            "Storage object_path contains unsafe or disallowed characters.",
+            code="INVALID_STORAGE_PATH",
+        )
+
+    if len(segments) < 2:
+        raise ValidationError(
+            "Storage object_path must include a filename inside the user's namespace.",
+            code="INVALID_STORAGE_PATH",
+        )
+
+    return clean_bucket, "/".join(segments)
+
+
 @dataclass(frozen=True, slots=True)
 class StorageObjectInfo:
     bucket: str
@@ -39,34 +81,15 @@ class UserStoragePathGuard:
                 code="BUCKET_NOT_ALLOWED",
             )
 
-        raw = object_path.strip()
-        if not raw or raw.startswith("/") or raw.startswith("\\") or "\x00" in raw or "\\" in raw:
-            raise ValidationError(
-                "Invalid storage object_path format.",
-                code="INVALID_STORAGE_PATH",
-            )
-
-        segments = raw.split("/")
-        if any(seg in ("", ".", "..") or not _SAFE_SEGMENT_RE.match(seg) for seg in segments):
-            raise ValidationError(
-                "Storage object_path contains unsafe or disallowed characters.",
-                code="INVALID_STORAGE_PATH",
-            )
-
-        owner_prefix = segments[0]
+        _, normalized_path = validate_storage_object_path(clean_bucket, object_path)
+        owner_prefix = normalized_path.split("/", 1)[0]
         if owner_prefix != user_id:
             raise AccessDeniedError(
                 "You do not have access to audio files belonging to another user.",
                 code="STORAGE_ACCESS_DENIED",
             )
 
-        if len(segments) < 2:
-            raise ValidationError(
-                "Storage object_path must include a filename inside the user's namespace.",
-                code="INVALID_STORAGE_PATH",
-            )
-
-        return "/".join(segments)
+        return normalized_path
 
 
 class StorageAdapter(ABC):
@@ -89,6 +112,16 @@ class StorageAdapter(ABC):
         content_type: str,
     ) -> StorageObjectInfo:
         """Upload a generated artifact to private storage."""
+
+    @abstractmethod
+    async def delete_object(self, bucket: str, object_path: str) -> bool:
+        """
+        Delete an exact object from private storage.
+
+        Returns True if the object existed and was deleted, or False if it was already absent
+        (idempotent). Implementations must validate bucket/object_path strictly to prevent
+        path traversal, root/directory deletion, or unauthorized deletion.
+        """
 
     @abstractmethod
     async def create_signed_url(

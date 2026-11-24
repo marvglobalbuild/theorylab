@@ -8,6 +8,7 @@ from app.audio.preservation import cleanup_workspace
 from app.core.config import Settings
 from app.core.errors import JobTimeoutError, MusicEngineError, RetryableJobError
 from app.core.logging import get_logger
+from app.processing.artifacts import JobArtifactTracker
 from app.processing.registry import ProcessingEngineRegistry
 from app.schemas.common import ErrorDetail
 from app.schemas.jobs import JobResponse, JobStatus
@@ -24,7 +25,8 @@ class ProcessingPipeline:
       2. Non-destructively decode to canonical PCM WAV (AudioDecodingInterface)
       3. Dispatch to registered model/DSP processor (ProcessingEngineRegistry)
     Handles timeouts, controlled retry deferral, cooperative cancellation,
-    structured correlation logging, and guaranteed temp workspace cleanup.
+    structured correlation logging, scoped generated-artifact cleanup on failure/cancellation,
+    and guaranteed temp workspace cleanup.
     """
 
     def __init__(self, settings: Settings, registry: ProcessingEngineRegistry) -> None:
@@ -58,6 +60,12 @@ class ProcessingPipeline:
             if timeout_seconds is not None
             else self._settings.music_engine_job_timeout_seconds
         )
+        artifact_tracker = JobArtifactTracker(
+            user_id=job.user_id,
+            job_id=job.job_id,
+            allowed_bucket=self._settings.supabase_audio_bucket,
+            source_object_path=job.source_audio.object_path,
+        )
 
         def log_extra(**kwargs: Any) -> dict[str, Any]:
             base: dict[str, Any] = {
@@ -79,6 +87,13 @@ class ProcessingPipeline:
             if asyncio.iscoroutine(res):
                 return await res
             return updated
+
+        async def _cleanup_generated_artifacts(reason: str) -> None:
+            await artifact_tracker.cleanup(
+                self._registry.storage,
+                reason=reason,
+                correlation_id=correlation_id,
+            )
 
         async def _execute_stages() -> JobResponse:
             nonlocal current
@@ -139,9 +154,17 @@ class ProcessingPipeline:
             )
             current = await save(current)
 
-            output = await self._registry.execute_job_stage(current, decoded, workspace_dir)
+            output = await self._registry.execute_job_stage(
+                current,
+                decoded,
+                workspace_dir,
+                artifact_tracker=artifact_tracker,
+            )
+            for ref in output.artifacts:
+                artifact_tracker.record_upload(ref.bucket, ref.object_path)
 
             if await self._check_cancelled(is_cancelled):
+                await _cleanup_generated_artifacts("job_cancelled")
                 return await self._mark_cancelled(current, save)
 
             finished_at = datetime.now(timezone.utc)
@@ -157,12 +180,22 @@ class ProcessingPipeline:
                     "updated_at": finished_at,
                 }
             )
-            saved = await save(current)
+            try:
+                saved = await save(current)
+            except Exception:
+                await _cleanup_generated_artifacts("final_db_persistence_failed")
+                raise
+
+            if saved.status == JobStatus.CANCELLED:
+                await _cleanup_generated_artifacts("job_cancelled_before_completion")
+                return saved
+
             logger.info("Completed music processing job", extra=log_extra(status=saved.status.value))
             return saved
 
         async def _handle_engine_error(exc: MusicEngineError) -> JobResponse:
             nonlocal current
+            await _cleanup_generated_artifacts(f"job_error:{exc.code}")
             if defer_on_retryable and exc.retryable and attempt < max_tries:
                 next_attempt = attempt + 1
                 logger.warning(
@@ -209,6 +242,8 @@ class ProcessingPipeline:
                 update={
                     "status": JobStatus.FAILED,
                     "stage": "failed",
+                    "artifacts": [],
+                    "result": None,
                     "error": ErrorDetail(
                         code=exc.code,
                         message=exc.message,
@@ -225,10 +260,11 @@ class ProcessingPipeline:
             if effective_timeout and effective_timeout > 0:
                 return await asyncio.wait_for(_execute_stages(), timeout=effective_timeout)
             return await _execute_stages()
-        except asyncio.TimeoutError as exc:
+        except asyncio.TimeoutError:
             timeout_err = JobTimeoutError(effective_timeout, stage=current.stage)
             return await _handle_engine_error(timeout_err)
         except asyncio.CancelledError:
+            await _cleanup_generated_artifacts("job_cancelled_signal")
             return await self._mark_cancelled(current, save)
         except MusicEngineError as exc:
             return await _handle_engine_error(exc)

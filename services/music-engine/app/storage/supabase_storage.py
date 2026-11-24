@@ -6,8 +6,8 @@ from urllib.parse import quote
 import httpx
 
 from app.core.config import Settings
-from app.core.errors import ResourceNotFoundError, StorageIntegrationError
-from app.storage.base import StorageAdapter, StorageObjectInfo
+from app.core.errors import AccessDeniedError, ResourceNotFoundError, StorageIntegrationError
+from app.storage.base import StorageAdapter, StorageObjectInfo, validate_storage_object_path
 
 
 class SupabaseStorageAdapter(StorageAdapter):
@@ -19,6 +19,7 @@ class SupabaseStorageAdapter(StorageAdapter):
     def __init__(self, settings: Settings, http_client: httpx.AsyncClient | None = None) -> None:
         self._base_url = settings.supabase_url.strip().rstrip("/")
         self._service_key = settings.supabase_service_role_key.strip()
+        self._allowed_bucket = settings.supabase_audio_bucket.strip()
         self._http_client = http_client
 
     def _ensure_configured(self) -> None:
@@ -172,6 +173,59 @@ class SupabaseStorageAdapter(StorageAdapter):
             size_bytes=len(payload),
             content_type=content_type,
         )
+
+    @staticmethod
+    def _is_not_found_response(response: httpx.Response) -> bool:
+        if response.status_code == 404:
+            return True
+        if response.status_code == 400:
+            try:
+                body = response.json()
+            except ValueError:
+                body = {}
+            if isinstance(body, dict):
+                status_str = str(body.get("statusCode") or "").strip()
+                err_str = str(body.get("error") or "").lower()
+                msg_str = str(body.get("message") or "").lower()
+                if status_str == "404" or "not_found" in err_str or "not found" in msg_str:
+                    return True
+        return False
+
+    async def delete_object(self, bucket: str, object_path: str) -> bool:
+        self._ensure_configured()
+        clean_bucket, clean_path = validate_storage_object_path(bucket, object_path)
+        if self._allowed_bucket and clean_bucket != self._allowed_bucket:
+            raise AccessDeniedError(
+                f"Storage bucket '{clean_bucket}' is not permitted for deletion.",
+                code="BUCKET_NOT_ALLOWED",
+            )
+
+        encoded = self._encode_path(clean_bucket, clean_path)
+        url = f"{self._base_url}/storage/v1/object/{encoded}"
+        try:
+            if self._http_client is not None:
+                response = await self._http_client.delete(url, headers=self._headers(), timeout=15.0)
+            else:
+                async with httpx.AsyncClient(timeout=15.0) as client:
+                    response = await client.delete(url, headers=self._headers())
+        except httpx.HTTPError as exc:
+            raise StorageIntegrationError(
+                f"Failed to delete object from Supabase Storage ({type(exc).__name__}).",
+                code="STORAGE_DELETE_FAILED",
+                status_code=502,
+                retryable=True,
+            ) from exc
+
+        if self._is_not_found_response(response):
+            return False
+        if response.status_code >= 400:
+            raise StorageIntegrationError(
+                f"Supabase Storage delete failed with HTTP {response.status_code}.",
+                code="STORAGE_DELETE_FAILED",
+                status_code=502,
+                retryable=response.status_code >= 500,
+            )
+        return True
 
     async def create_signed_url(
         self,

@@ -8,6 +8,7 @@ from app.audio.validation import FORMAT_MIME_TYPES
 from app.core.config import Settings
 from app.core.errors import ModelNotIntegratedError
 from app.processing.accompaniment import AccompanimentOrchestrator
+from app.processing.artifacts import JobArtifactTracker
 from app.processing.instruments import InstrumentResourceManager
 from app.processing.interfaces import (
     AudioAnalysisInterface,
@@ -30,6 +31,7 @@ from app.schemas.capabilities import (
     JobTypeCapability,
 )
 from app.schemas.jobs import JobArtifactRef, JobResponse, JobType
+from app.storage.base import StorageAdapter
 
 
 class JobExecutionOutput:
@@ -73,6 +75,7 @@ class ProcessingEngineRegistry:
         mixing: MixingAndRenderingInterface | None = None,
         instruments: InstrumentResourceManager | None = None,
         accompaniment: AccompanimentOrchestrator | None = None,
+        storage: StorageAdapter | None = None,
     ) -> None:
         self._settings = settings
         self.ingestion = ingestion
@@ -87,6 +90,14 @@ class ProcessingEngineRegistry:
         self.mixing = mixing
         self.instruments = instruments
         self.accompaniment = accompaniment
+        inferred_storage = (
+            storage
+            or (getattr(accompaniment, "_storage", None) if accompaniment is not None else None)
+            or getattr(ingestion, "_storage", None)
+        )
+        self.storage: StorageAdapter | None = (
+            inferred_storage if isinstance(inferred_storage, StorageAdapter) else None
+        )
         self._custom_processors: dict[JobType, tuple[str, JobProcessorCallable]] = {}
 
     def register_processor(
@@ -117,6 +128,8 @@ class ProcessingEngineRegistry:
         job: JobResponse,
         decoded: DecodedAudio,
         workspace_dir: Path,
+        *,
+        artifact_tracker: JobArtifactTracker | None = None,
     ) -> JobExecutionOutput:
         if job.job_type in self._custom_processors:
             _, handler = self._custom_processors[job.job_type]
@@ -168,7 +181,12 @@ class ProcessingEngineRegistry:
         if job.job_type == JobType.ACCOMPANIMENT_GENERATION:
             if self.accompaniment is None:
                 raise ModelNotIntegratedError(job.job_type.value, "AccompanimentOrchestrator")
-            result_payload, artifacts = await self.accompaniment.generate(job, decoded, workspace_dir)
+            result_payload, artifacts = await self.accompaniment.generate(
+                job,
+                decoded,
+                workspace_dir,
+                artifact_tracker=artifact_tracker,
+            )
             return JobExecutionOutput(result=result_payload, artifacts=artifacts)
 
         if job.job_type == JobType.AUDIO_RENDERING:
@@ -179,6 +197,7 @@ class ProcessingEngineRegistry:
                 decoded,
                 workspace_dir,
                 include_mix_and_export=True,
+                artifact_tracker=artifact_tracker,
             )
             return JobExecutionOutput(result=result_payload, artifacts=artifacts)
 

@@ -57,23 +57,48 @@ async def recover_orphaned_jobs(
     worker_id: str,
 ) -> dict[str, int]:
     """
-    Reconciles jobs left stuck in `processing` after an abrupt worker crash/restart.
-
-    Compatible with Supabase migration 0002's monotonic state trigger:
-      - Never transitions `processing` back to `queued`.
-      - If a cancellation signal exists, transitions cleanly to `cancelled`.
-      - Otherwise keeps `status = 'processing'`, updates `stage = 'recovering_after_worker_restart'`,
-        and re-enqueues into ARQ with a fresh recovery dispatch ID.
-      - If re-enqueueing fails, marks the job terminal `failed` with `WORKER_INTERRUPTED`.
+    Reconciles orphaned jobs on worker startup/recovery:
+      1. Stale `processing` jobs exceeding `music_engine_stale_job_timeout_seconds`:
+         - Compatible with Supabase migration 0002's monotonic state trigger (never reverts
+           `processing` back to `queued`).
+         - Finalizes cancelled jobs cleanly via conditional update.
+         - Re-enqueues recoverable processing jobs with a fresh recovery dispatch ID.
+         - Marks terminal `failed` (`WORKER_INTERRUPTED`) if re-enqueueing fails.
+      2. Stale `queued` jobs exceeding `music_engine_stale_queued_job_timeout_seconds`:
+         - Verifies via `queue.has_pending_job(job_id)` before treating a queued job as orphaned.
+         - Never fails jobs legitimately waiting in ARQ/Valkey or already active in a worker.
+         - Uses conditional status-guarded DB updates (`update_if_status(..., JobStatus.QUEUED)`)
+           so concurrently activated/completed/cancelled jobs are never overwritten.
+         - Marks genuinely orphaned queued jobs terminal `failed` (`QUEUE_DISPATCH_ORPHANED`).
+         - Idempotent across repeated recovery executions.
     """
-    cutoff = datetime.now(timezone.utc) - timedelta(
+    now_ref = datetime.now(timezone.utc)
+    processing_cutoff = now_ref - timedelta(
         seconds=settings.music_engine_stale_job_timeout_seconds
     )
-    stale_jobs = await repository.list_stale_processing_jobs(older_than=cutoff, limit=50)
-    summary = {"inspected": len(stale_jobs), "requeued": 0, "cancelled": 0, "failed": 0}
+    stale_processing = await repository.list_stale_processing_jobs(
+        older_than=processing_cutoff,
+        limit=50,
+    )
 
-    for stale in stale_jobs:
-        if stale.status in TERMINAL_JOB_STATUSES:
+    queued_cutoff = now_ref - timedelta(
+        seconds=settings.music_engine_stale_queued_job_timeout_seconds
+    )
+    stale_queued = await repository.list_stale_queued_jobs(
+        older_than=queued_cutoff,
+        limit=50,
+    )
+
+    summary = {
+        "inspected": len(stale_processing) + len(stale_queued),
+        "requeued": 0,
+        "cancelled": 0,
+        "failed": 0,
+    }
+
+    # --- Phase 1: Stale `processing` job recovery (existing behavior preserved + status-guarded) ---
+    for stale in stale_processing:
+        if stale.status != JobStatus.PROCESSING:
             continue
 
         now = datetime.now(timezone.utc)
@@ -86,7 +111,22 @@ async def recover_orphaned_jobs(
                     "updated_at": now,
                 }
             )
-            await repository.update(cancelled)
+            try:
+                updated = await repository.update_if_status(cancelled, JobStatus.PROCESSING)
+            except Exception as db_exc:
+                logger.error(
+                    "Database update failed while cancelling orphaned processing job (%s)",
+                    type(db_exc).__name__,
+                    extra={
+                        "job_id": stale.job_id,
+                        "user_id": stale.user_id,
+                        "worker_id": worker_id,
+                        "queue_backend": queue.backend_name,
+                    },
+                )
+                continue
+            if updated is None:
+                continue
             await queue.clear_cancel_signal(stale.job_id)
             summary["cancelled"] += 1
             logger.info(
@@ -94,7 +134,7 @@ async def recover_orphaned_jobs(
                 extra={
                     "job_id": stale.job_id,
                     "user_id": stale.user_id,
-                    "status": cancelled.status.value,
+                    "status": updated.status.value,
                     "worker_id": worker_id,
                     "queue_backend": queue.backend_name,
                 },
@@ -110,9 +150,11 @@ async def recover_orphaned_jobs(
                     "updated_at": now,
                 }
             )
-            await repository.update(recovering)
+            updated = await repository.update_if_status(recovering, JobStatus.PROCESSING)
+            if updated is None:
+                continue
             await queue.enqueue(
-                recovering,
+                updated,
                 correlation_id=f"recovery-{worker_id}",
                 job_id_override=recovery_dispatch_id,
             )
@@ -123,7 +165,7 @@ async def recover_orphaned_jobs(
                     "job_id": stale.job_id,
                     "user_id": stale.user_id,
                     "job_type": stale.job_type.value,
-                    "status": recovering.status.value,
+                    "status": updated.status.value,
                     "worker_id": worker_id,
                     "queue_backend": queue.backend_name,
                 },
@@ -146,19 +188,168 @@ async def recover_orphaned_jobs(
                     "updated_at": now,
                 }
             )
-            await repository.update(failed)
+            try:
+                updated_fail = await repository.update_if_status(failed, JobStatus.PROCESSING)
+            except Exception as db_exc:
+                logger.error(
+                    "Database update failed while marking orphaned processing job failed (%s)",
+                    type(db_exc).__name__,
+                    extra={
+                        "job_id": stale.job_id,
+                        "user_id": stale.user_id,
+                        "worker_id": worker_id,
+                        "queue_backend": queue.backend_name,
+                    },
+                )
+                continue
+            if updated_fail is None:
+                continue
             summary["failed"] += 1
             logger.error(
                 "Failed to recover orphaned processing job; marked terminal failed",
                 extra={
                     "job_id": stale.job_id,
                     "user_id": stale.user_id,
-                    "status": failed.status.value,
+                    "status": updated_fail.status.value,
                     "error_code": "WORKER_INTERRUPTED",
                     "worker_id": worker_id,
                     "queue_backend": queue.backend_name,
                 },
             )
+
+    # --- Phase 2: Stale `queued` job recovery (queue-verified + conditional DB update) ---
+    for stale in stale_queued:
+        if stale.status != JobStatus.QUEUED:
+            continue
+
+        now = datetime.now(timezone.utc)
+        if await queue.is_cancel_requested(stale.job_id):
+            cancelled = stale.model_copy(
+                update={
+                    "status": JobStatus.CANCELLED,
+                    "stage": "cancelled",
+                    "cancelled_at": stale.cancelled_at or now,
+                    "updated_at": now,
+                }
+            )
+            try:
+                updated = await repository.update_if_status(cancelled, JobStatus.QUEUED)
+            except Exception as db_exc:
+                logger.error(
+                    "Database update failed while cancelling orphaned queued job (%s)",
+                    type(db_exc).__name__,
+                    extra={
+                        "job_id": stale.job_id,
+                        "user_id": stale.user_id,
+                        "worker_id": worker_id,
+                        "queue_backend": queue.backend_name,
+                    },
+                )
+                continue
+            if updated is None:
+                continue
+            await queue.clear_cancel_signal(stale.job_id)
+            summary["cancelled"] += 1
+            logger.info(
+                "Finalized cancelled stale queued job during worker recovery",
+                extra={
+                    "job_id": stale.job_id,
+                    "user_id": stale.user_id,
+                    "status": updated.status.value,
+                    "worker_id": worker_id,
+                    "queue_backend": queue.backend_name,
+                },
+            )
+            continue
+
+        try:
+            still_pending = await queue.has_pending_job(stale.job_id)
+        except Exception as queue_exc:
+            logger.warning(
+                "Skipped stale queued job recovery because queue state could not be verified (%s)",
+                type(queue_exc).__name__,
+                extra={
+                    "job_id": stale.job_id,
+                    "user_id": stale.user_id,
+                    "worker_id": worker_id,
+                    "queue_backend": queue.backend_name,
+                },
+            )
+            continue
+
+        if still_pending:
+            logger.info(
+                "Preserved stale queued job because it is still pending or active in queue",
+                extra={
+                    "job_id": stale.job_id,
+                    "user_id": stale.user_id,
+                    "status": stale.status.value,
+                    "worker_id": worker_id,
+                    "queue_backend": queue.backend_name,
+                },
+            )
+            continue
+
+        orphaned_failed = stale.model_copy(
+            update={
+                "status": JobStatus.FAILED,
+                "stage": "failed",
+                "error": ErrorDetail(
+                    code="QUEUE_DISPATCH_ORPHANED",
+                    message=(
+                        "This job remained queued past the recovery threshold without an active "
+                        "queue entry and was closed automatically. Please resubmit the job."
+                    ),
+                    retryable=True,
+                    details={
+                        "stale_queued_timeout_seconds": settings.music_engine_stale_queued_job_timeout_seconds,
+                        "recovered_by_worker": worker_id,
+                    },
+                ),
+                "completed_at": now,
+                "updated_at": now,
+            }
+        )
+        try:
+            updated_orphan = await repository.update_if_status(orphaned_failed, JobStatus.QUEUED)
+        except Exception as db_exc:
+            logger.error(
+                "Database update failed while recovering orphaned queued job (%s)",
+                type(db_exc).__name__,
+                extra={
+                    "job_id": stale.job_id,
+                    "user_id": stale.user_id,
+                    "worker_id": worker_id,
+                    "queue_backend": queue.backend_name,
+                },
+            )
+            continue
+
+        if updated_orphan is None:
+            logger.info(
+                "Skipped orphaned queued job recovery because job transitioned concurrently",
+                extra={
+                    "job_id": stale.job_id,
+                    "user_id": stale.user_id,
+                    "worker_id": worker_id,
+                    "queue_backend": queue.backend_name,
+                },
+            )
+            continue
+
+        summary["failed"] += 1
+        logger.warning(
+            "Recovered orphaned queued job with no active queue entry; marked terminal failed",
+            extra={
+                "job_id": stale.job_id,
+                "user_id": stale.user_id,
+                "job_type": stale.job_type.value,
+                "status": updated_orphan.status.value,
+                "error_code": "QUEUE_DISPATCH_ORPHANED",
+                "worker_id": worker_id,
+                "queue_backend": queue.backend_name,
+            },
+        )
 
     return summary
 

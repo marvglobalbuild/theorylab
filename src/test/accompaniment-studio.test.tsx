@@ -729,6 +729,21 @@ describe("AI Accompaniment and Arrangement Studio — Core Workflow, Mastering, 
     ).toBeInTheDocument();
   });
 
+  it("rejects a Supabase project URL supplied as VITE_MUSIC_ENGINE_URL and displays the honest not-configured state without calling Supabase", async () => {
+    const { createMusicIntelligenceService } = await import("@/services/music-intelligence");
+    const fetchSpy = vi.fn();
+    const service = createMusicIntelligenceService({
+      baseUrl: "https://pyxtpaozggpcswdkehwb.supabase.co/",
+      fetchImpl: fetchSpy as unknown as typeof fetch,
+    });
+
+    render(<AccompanimentStudio service={service} />);
+    expect(
+      screen.getByText(/Music Intelligence Engine backend not configured/i),
+    ).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it("P1: restores Stage 02 analysis on completed reopen, clears stale Stage 05/06/07 outputs when opening a failed job, and returns to workspace on history retry", async () => {
     const completedRender = makeCompletedMasterJob();
     const siblingAnalysis: MusicProcessingJob = {

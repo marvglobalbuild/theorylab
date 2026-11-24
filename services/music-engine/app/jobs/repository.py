@@ -51,12 +51,34 @@ class JobRepository(ABC):
         pass
 
     @abstractmethod
+    async def update_if_status(
+        self,
+        job: JobResponse,
+        expected_status: JobStatus,
+    ) -> JobResponse | None:
+        """
+        Conditionally updates `job` ONLY if its persisted status still equals `expected_status`.
+        Returns the updated JobResponse if the conditional write matched, or None if another
+        worker/API request already transitioned the job to a different status.
+        """
+        pass
+
+    @abstractmethod
     async def list_stale_processing_jobs(
         self,
         older_than: datetime,
         limit: int = 50,
     ) -> list[JobResponse]:
         """Returns jobs stuck in `processing` with updated_at earlier than `older_than`."""
+        pass
+
+    @abstractmethod
+    async def list_stale_queued_jobs(
+        self,
+        older_than: datetime,
+        limit: int = 50,
+    ) -> list[JobResponse]:
+        """Returns jobs stuck in `queued` with updated_at earlier than `older_than`."""
         pass
 
 
@@ -109,6 +131,18 @@ class InMemoryJobRepository(JobRepository):
                 if j.user_id == user_id and j.status not in TERMINAL_JOB_STATUSES
             )
 
+    async def update_if_status(
+        self,
+        job: JobResponse,
+        expected_status: JobStatus,
+    ) -> JobResponse | None:
+        async with self._lock:
+            existing = self._jobs.get(job.job_id)
+            if existing is None or existing.status != expected_status:
+                return None
+            self._jobs[job.job_id] = job
+            return job
+
     async def list_stale_processing_jobs(
         self,
         older_than: datetime,
@@ -119,6 +153,20 @@ class InMemoryJobRepository(JobRepository):
                 j
                 for j in self._jobs.values()
                 if j.status == JobStatus.PROCESSING and j.updated_at < older_than
+            ]
+            stale.sort(key=lambda j: j.updated_at)
+            return stale[:limit]
+
+    async def list_stale_queued_jobs(
+        self,
+        older_than: datetime,
+        limit: int = 50,
+    ) -> list[JobResponse]:
+        async with self._lock:
+            stale = [
+                j
+                for j in self._jobs.values()
+                if j.status == JobStatus.QUEUED and j.updated_at < older_than
             ]
             stale.sort(key=lambda j: j.updated_at)
             return stale[:limit]
@@ -307,6 +355,29 @@ class SupabaseJobRepository(JobRepository):
         rows = res.json()
         return len(rows) if isinstance(rows, list) else 0
 
+    async def update_if_status(
+        self,
+        job: JobResponse,
+        expected_status: JobStatus,
+    ) -> JobResponse | None:
+        encoded_id = quote(job.job_id, safe="")
+        encoded_uid = quote(job.user_id, safe="")
+        encoded_status = quote(expected_status.value, safe="")
+        res = await self._request(
+            "PATCH",
+            f"{self._table}?id=eq.{encoded_id}&user_id=eq.{encoded_uid}&status=eq.{encoded_status}",
+            json_body=self._serialize(job, for_update=True),
+        )
+        if res.status_code >= 400:
+            raise StorageIntegrationError(
+                f"Supabase conditional job update failed with HTTP {res.status_code}.",
+                code="DATABASE_WRITE_FAILED",
+            )
+        rows = res.json()
+        if isinstance(rows, list) and rows:
+            return self._deserialize(rows[0])
+        return None
+
     async def list_stale_processing_jobs(
         self,
         older_than: datetime,
@@ -320,6 +391,24 @@ class SupabaseJobRepository(JobRepository):
         if res.status_code >= 400:
             raise StorageIntegrationError(
                 f"Supabase stale job query failed with HTTP {res.status_code}.",
+                code="DATABASE_READ_FAILED",
+            )
+        rows = res.json()
+        return [self._deserialize(r) for r in rows] if isinstance(rows, list) else []
+
+    async def list_stale_queued_jobs(
+        self,
+        older_than: datetime,
+        limit: int = 50,
+    ) -> list[JobResponse]:
+        cutoff = quote(older_than.isoformat(), safe="")
+        res = await self._request(
+            "GET",
+            f"{self._table}?status=eq.{JobStatus.QUEUED.value}&updated_at=lt.{cutoff}&order=updated_at.asc&limit={limit}",
+        )
+        if res.status_code >= 400:
+            raise StorageIntegrationError(
+                f"Supabase stale queued job query failed with HTTP {res.status_code}.",
                 code="DATABASE_READ_FAILED",
             )
         rows = res.json()
