@@ -39,7 +39,7 @@ const inputClass =
 function SignInPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
-  const { initialized, configured, session, setSessionDirect } = useAuth();
+  const { initialized, configured, session, setSessionDirect, enterPresentationDemo } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -234,6 +234,32 @@ function SignInPage() {
           </p>
         )}
       </form>
+
+      <div className="mt-6 rounded-[2px] border border-primary/25 bg-primary/5 p-4 text-xs text-foreground">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="font-semibold uppercase tracking-wider text-[0.7rem] text-primary">
+              Presentation Demo Mode
+            </p>
+            <p className="mt-0.5 text-muted-foreground leading-relaxed">
+              Live presentation access without requiring account sign-in.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              enterPresentationDemo();
+              const dest = safeRedirect || "/learn/accompaniment";
+              void navigate({ to: dest, replace: true });
+            }}
+            className="shrink-0 border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground text-xs"
+          >
+            Launch Demo Studio →
+          </Button>
+        </div>
+      </div>
 
       <div className="mt-8 space-y-3 border-t border-border pt-6 text-sm text-muted-foreground">
         <p>

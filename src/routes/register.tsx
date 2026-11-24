@@ -54,7 +54,7 @@ const inputClass =
 function RegisterPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
-  const { initialized, configured, session, setSessionDirect } = useAuth();
+  const { initialized, configured, session, setSessionDirect, enterPresentationDemo } = useAuth();
 
   const [accountType, setAccountType] = useState<RegistrationAccountType>(search.as ?? "student");
   const [name, setName] = useState("");
@@ -323,6 +323,31 @@ function RegisterPage() {
               </p>
             )}
           </form>
+
+          <div className="mt-6 rounded-[2px] border border-primary/25 bg-primary/5 p-4 text-xs text-foreground">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-semibold uppercase tracking-wider text-[0.7rem] text-primary">
+                  Presentation Demo Mode
+                </p>
+                <p className="mt-0.5 text-muted-foreground leading-relaxed">
+                  Need immediate access for a walkthrough? Enter without registration.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  enterPresentationDemo();
+                  void navigate({ to: "/learn/accompaniment", replace: true });
+                }}
+                className="shrink-0 border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground text-xs"
+              >
+                Launch Demo Studio →
+              </Button>
+            </div>
+          </div>
 
           <p className="mt-8 border-t border-border pt-6 text-sm text-muted-foreground">
             Already have an account?{" "}

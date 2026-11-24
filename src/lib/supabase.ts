@@ -56,22 +56,28 @@ function isPublishableKeyValid(rawKey: string): { valid: boolean; reason?: strin
   return { valid: true };
 }
 
+const FALLBACK_SUPABASE_URL = "https://pyxtpaozggpcswdkehwb.supabase.co";
+const FALLBACK_SUPABASE_KEY = "sb_publishable_y-IP9sWx7NwOmi3-NKgPeg_-F_8yYun";
+
 function readDefaultEnv(): SupabaseEnvInput {
+  const envUrl =
+    import.meta.env.VITE_SUPABASE_URL ??
+    (typeof process !== "undefined"
+      ? (process.env?.VITE_SUPABASE_URL || process.env?.SUPABASE_URL)
+      : undefined);
+  const envKey =
+    import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ??
+    import.meta.env.VITE_SUPABASE_ANON_KEY ??
+    (typeof process !== "undefined"
+      ? (process.env?.VITE_SUPABASE_PUBLISHABLE_KEY ||
+         process.env?.VITE_SUPABASE_ANON_KEY ||
+         process.env?.SUPABASE_PUBLISHABLE_KEY ||
+         process.env?.SUPABASE_ANON_KEY)
+      : undefined);
+
   return {
-    VITE_SUPABASE_URL:
-      import.meta.env.VITE_SUPABASE_URL ??
-      (typeof process !== "undefined"
-        ? (process.env?.VITE_SUPABASE_URL || process.env?.SUPABASE_URL)
-        : undefined),
-    VITE_SUPABASE_PUBLISHABLE_KEY:
-      import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ??
-      import.meta.env.VITE_SUPABASE_ANON_KEY ??
-      (typeof process !== "undefined"
-        ? (process.env?.VITE_SUPABASE_PUBLISHABLE_KEY ||
-           process.env?.VITE_SUPABASE_ANON_KEY ||
-           process.env?.SUPABASE_PUBLISHABLE_KEY ||
-           process.env?.SUPABASE_ANON_KEY)
-        : undefined),
+    VITE_SUPABASE_URL: readTrimmed(envUrl) || FALLBACK_SUPABASE_URL,
+    VITE_SUPABASE_PUBLISHABLE_KEY: readTrimmed(envKey) || FALLBACK_SUPABASE_KEY,
   };
 }
 

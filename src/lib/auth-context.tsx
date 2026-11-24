@@ -24,6 +24,7 @@ export interface AuthContextValue {
   refreshSession: () => Promise<AuthSession | null>;
   signOut: () => Promise<void>;
   setSessionDirect: (session: AuthSession | null) => void;
+  enterPresentationDemo: () => AuthSession;
   clearRecoveryMode: () => void;
 }
 
@@ -40,6 +41,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshSession = useCallback(async (): Promise<AuthSession | null> => {
     const seq = ++seqRef.current;
+
+    // Check presentation demo entry in browser sessionStorage
+    if (typeof window !== "undefined") {
+      try {
+        const demoRaw = window.sessionStorage.getItem("theorylab_presentation_demo_session");
+        if (demoRaw) {
+          const parsed = JSON.parse(demoRaw) as AuthSession;
+          if (parsed && parsed.userId && seq === seqRef.current) {
+            setConfigured(true);
+            setSession(parsed);
+            setError(null);
+            setLoading(false);
+            setInitialized(true);
+            return parsed;
+          }
+        }
+      } catch {
+        // Ignore JSON/sessionStorage access errors
+      }
+    }
+
     const isConfigured = isSupabaseConfigured();
     setConfigured(isConfigured);
 
@@ -102,6 +124,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     seqRef.current += 1;
+    if (typeof window !== "undefined") {
+      try {
+        window.sessionStorage.removeItem("theorylab_presentation_demo_session");
+      } catch {
+        // Ignore errors
+      }
+    }
     await authService.signOut();
     setSession(null);
     setError(null);
@@ -116,6 +145,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setError(null);
     setLoading(false);
     setInitialized(true);
+  }, []);
+
+  const enterPresentationDemo = useCallback((): AuthSession => {
+    seqRef.current += 1;
+    const demoSession: AuthSession = {
+      userId: "demo-presenter-guest",
+      email: "presenter-demo@theorylab.internal",
+      role: "independent_learner",
+      roles: ["independent_learner"],
+      displayName: "Guest Presenter (Demo)",
+      preferredLevel: "intermediate",
+      accountStatus: "active",
+      emailVerified: true,
+      profileComplete: true,
+    };
+    if (typeof window !== "undefined") {
+      try {
+        window.sessionStorage.setItem(
+          "theorylab_presentation_demo_session",
+          JSON.stringify(demoSession),
+        );
+      } catch {
+        // Ignore quota/private mode errors
+      }
+    }
+    setSession(demoSession);
+    setConfigured(true);
+    setError(null);
+    setLoading(false);
+    setInitialized(true);
+    return demoSession;
   }, []);
 
   const clearRecoveryMode = useCallback(() => {
@@ -139,6 +199,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshSession,
       signOut,
       setSessionDirect,
+      enterPresentationDemo,
       clearRecoveryMode,
     }),
     [
@@ -152,6 +213,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshSession,
       signOut,
       setSessionDirect,
+      enterPresentationDemo,
       clearRecoveryMode,
     ],
   );
