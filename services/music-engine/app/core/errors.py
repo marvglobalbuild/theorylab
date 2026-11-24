@@ -54,6 +54,18 @@ class AccountStatusUnavailableError(MusicEngineError):
         super().__init__(code=code, message=message, status_code=503, details=details, retryable=True)
 
 
+class AuthProviderUnavailableError(MusicEngineError):
+    """Raised when the authentication provider endpoint is unreachable or times out."""
+
+    def __init__(
+        self,
+        message: str = "Unable to reach authentication service. Please try again shortly.",
+        code: str = "AUTH_PROVIDER_UNREACHABLE",
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(code=code, message=message, status_code=503, details=details, retryable=True)
+
+
 class ResourceNotFoundError(MusicEngineError):
     def __init__(
         self,

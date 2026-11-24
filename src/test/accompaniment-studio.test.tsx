@@ -488,6 +488,9 @@ function createMockService(
 
 describe("AI Accompaniment and Arrangement Studio — Core Workflow, Mastering, Exports & Security", () => {
   beforeEach(() => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      window.localStorage.clear();
+    }
     vi.stubGlobal("URL", {
       createObjectURL: vi.fn(() => "blob:mock-audio-url"),
       revokeObjectURL: vi.fn(),
@@ -495,6 +498,9 @@ describe("AI Accompaniment and Arrangement Studio — Core Workflow, Mastering, 
   });
 
   afterEach(() => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      window.localStorage.clear();
+    }
     cleanup();
     vi.unstubAllGlobals();
     vi.clearAllMocks();

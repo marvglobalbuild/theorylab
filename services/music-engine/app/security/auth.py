@@ -12,6 +12,7 @@ from app.core.config import Settings
 from app.core.errors import (
     AccessDeniedError,
     AccountStatusUnavailableError,
+    AuthProviderUnavailableError,
     AuthenticationError,
 )
 from app.core.logging import get_logger
@@ -132,9 +133,10 @@ class SupabaseAuthVerifier:
                 "Failed to reach Supabase Auth endpoint (%s)",
                 type(exc).__name__,
             )
-            raise AuthenticationError(
-                "Unable to verify authentication session with Supabase Auth.",
+            raise AuthProviderUnavailableError(
+                "Unable to verify authentication session with Supabase Auth right now. Please try again shortly.",
                 code="AUTH_PROVIDER_UNREACHABLE",
+                details={"error_type": type(exc).__name__},
             ) from exc
 
         if response.status_code in (401, 403):

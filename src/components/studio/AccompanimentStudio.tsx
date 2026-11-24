@@ -1,8 +1,9 @@
-import { AlertCircle, History, Info, Plus, Sparkles } from "lucide-react";
+import { AlertCircle, History, Info, Plus, RefreshCw, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { FilterTabs, PageHeader, PreviewNotice } from "@/components/workspace/WorkspacePrimitives";
+import { supabase } from "@/lib/supabase";
 import { musicIntelligenceService } from "@/services";
 import type {
   AccompanimentJobResult,
@@ -45,6 +46,8 @@ export interface AccompanimentStudioProps {
   maxPollRetries?: number;
 }
 
+export const ACTIVE_STUDIO_JOB_STORAGE_KEY = "sonora_active_studio_job_id";
+
 type StudioTab = "workspace" | "history";
 
 export function AccompanimentStudio({
@@ -59,6 +62,7 @@ export function AccompanimentStudio({
   const [instrumentsDiag, setInstrumentsDiag] = useState<InstrumentDiagnostics | null>(null);
   const [backendStatusError, setBackendStatusError] = useState<string | null>(null);
   const [engineUnavailableMsg, setEngineUnavailableMsg] = useState<string | null>(null);
+  const [recoveryNotice, setRecoveryNotice] = useState<string | null>(null);
 
   // Stage A: Project & Vocal input
   const [projectName, setProjectName] = useState("");
@@ -134,6 +138,74 @@ export function AccompanimentStudio({
     };
   }, [clearPollTimer, stopAllStudioPlayback]);
 
+  const applyJobSnapshot = useCallback((job: MusicProcessingJob) => {
+    setActiveJob(job);
+    if (typeof window !== "undefined" && window.localStorage) {
+      if (job.status === "queued" || job.status === "processing") {
+        window.localStorage.setItem(ACTIVE_STUDIO_JOB_STORAGE_KEY, job.job_id);
+      } else if (
+        job.status === "completed" ||
+        job.status === "failed" ||
+        job.status === "cancelled"
+      ) {
+        window.localStorage.removeItem(ACTIVE_STUDIO_JOB_STORAGE_KEY);
+      }
+    }
+    if (job.audio_metadata) {
+      setVerifiedMetadata(job.audio_metadata);
+    }
+
+    if (job.status === "completed" && job.result) {
+      if (job.job_type === "audio_analysis" && isAnalysisJobResult(job.result)) {
+        setAnalysisResult(job.result);
+      } else if (
+        (job.job_type === "accompaniment_generation" || job.job_type === "audio_rendering") &&
+        isAccompanimentJobResult(job.result)
+      ) {
+        setAccompanimentJob(job);
+        setAccompanimentResult(job.result);
+      }
+    }
+  }, []);
+
+  const activeJobId = activeJob?.job_id ?? null;
+  const isJobRunning = activeJob?.status === "queued" || activeJob?.status === "processing";
+
+  const handleResumeActiveJob = useCallback(
+    async (jobIdToResume?: string) => {
+      const targetId =
+        jobIdToResume ||
+        activeJobId ||
+        (typeof window !== "undefined" && window.localStorage
+          ? window.localStorage.getItem(ACTIVE_STUDIO_JOB_STORAGE_KEY)
+          : null);
+      if (!targetId) return;
+
+      setStudioError(null);
+      clearPollTimer();
+      const res = await service.getJob(targetId);
+      if (res.status === "ok") {
+        setProjectName(extractProjectName(res.data));
+        setUploadedSource(res.data.source_audio);
+        applyJobSnapshot(res.data);
+        restoreAnalysisForJob(res.data);
+        restoreConfigFromJobParameters(res.data.parameters);
+        if (res.data.status === "completed") {
+          setRecoveryNotice(
+            `Retrieved completed results for accompaniment generation project (${res.data.job_id.slice(0, 8)}…).`,
+          );
+        }
+      } else if (res.status === "error") {
+        setStudioError(
+          res.httpStatus === 401
+            ? "Your session expired while monitoring the processing job. Sign in again to resume."
+            : res.message,
+        );
+      }
+    },
+    [activeJobId, service, clearPollTimer, applyJobSnapshot],
+  );
+
   const loadHistory = useCallback(async () => {
     if (!service.isConfigured()) return;
     setHistoryLoading(true);
@@ -142,6 +214,29 @@ export function AccompanimentStudio({
     setHistoryLoading(false);
     if (res.status === "ok") {
       setHistoryJobs(res.data);
+      // Check saved job ID or active running job from history
+      const savedJobId =
+        typeof window !== "undefined" && window.localStorage
+          ? window.localStorage.getItem(ACTIVE_STUDIO_JOB_STORAGE_KEY)
+          : null;
+      const matchedJob = savedJobId
+        ? res.data.find((j) => j.job_id === savedJobId)
+        : null;
+      const jobToRestore =
+        matchedJob ??
+        res.data.find((j) => j.status === "queued" || j.status === "processing");
+      if (jobToRestore && !activeJob) {
+        setProjectName(extractProjectName(jobToRestore));
+        setUploadedSource(jobToRestore.source_audio);
+        applyJobSnapshot(jobToRestore);
+        restoreAnalysisForJob(jobToRestore);
+        restoreConfigFromJobParameters(jobToRestore.parameters);
+        if (jobToRestore.status === "completed") {
+          setRecoveryNotice(
+            `Retrieved completed results for accompaniment generation project (${jobToRestore.job_id.slice(0, 8)}…).`,
+          );
+        }
+      }
     } else if (res.status === "error") {
       setHistoryError(
         res.httpStatus === 401
@@ -149,9 +244,9 @@ export function AccompanimentStudio({
           : res.message,
       );
     }
-  }, [service]);
+  }, [service, activeJob, applyJobSnapshot]);
 
-  // Initial capabilities + instruments + history fetch
+  // Initial capabilities + instruments + history fetch + job recovery
   useEffect(() => {
     let cancelled = false;
 
@@ -191,27 +286,29 @@ export function AccompanimentStudio({
     };
   }, [service, loadHistory]);
 
-  const applyJobSnapshot = useCallback((job: MusicProcessingJob) => {
-    setActiveJob(job);
-    if (job.audio_metadata) {
-      setVerifiedMetadata(job.audio_metadata);
-    }
-
-    if (job.status === "completed" && job.result) {
-      if (job.job_type === "audio_analysis" && isAnalysisJobResult(job.result)) {
-        setAnalysisResult(job.result);
-      } else if (
-        (job.job_type === "accompaniment_generation" || job.job_type === "audio_rendering") &&
-        isAccompanimentJobResult(job.result)
-      ) {
-        setAccompanimentJob(job);
-        setAccompanimentResult(job.result);
+  // Listen for Supabase session refresh or re-authentication to resume monitoring automatically
+  useEffect(() => {
+    if (!supabase?.auth) return;
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
+        setStudioError((prev) => (prev?.includes("session expired") ? null : prev));
+        const savedJobId =
+          typeof window !== "undefined" && window.localStorage
+            ? window.localStorage.getItem(ACTIVE_STUDIO_JOB_STORAGE_KEY)
+            : null;
+        const targetId = activeJobId || savedJobId;
+        if (targetId) {
+          void handleResumeActiveJob(targetId);
+        }
+        void loadHistory();
       }
-    }
-  }, []);
-
-  const activeJobId = activeJob?.job_id ?? null;
-  const isJobRunning = activeJob?.status === "queued" || activeJob?.status === "processing";
+    });
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [activeJobId, handleResumeActiveJob, loadHistory]);
 
   // Poll active queued / processing job until terminal state with bounded transient retries
   useEffect(() => {
@@ -743,13 +840,50 @@ export function AccompanimentStudio({
         </div>
       )}
 
+      {recoveryNotice && (
+        <div
+          role="status"
+          className="flex items-center justify-between gap-2.5 rounded-[2px] border border-primary/40 bg-primary/5 px-4 py-3 text-xs text-foreground"
+        >
+          <div className="flex items-center gap-2">
+            <Sparkles className="size-4 shrink-0 text-primary" aria-hidden />
+            <span>{recoveryNotice}</span>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => setRecoveryNotice(null)}
+          >
+            Dismiss
+          </Button>
+        </div>
+      )}
+
       {studioError && (
         <div
           role="alert"
-          className="flex items-start gap-2.5 rounded-[2px] border border-crimson/40 bg-crimson/5 px-4 py-3 text-xs text-crimson-deep"
+          className="flex flex-wrap items-center justify-between gap-2.5 rounded-[2px] border border-crimson/40 bg-crimson/5 px-4 py-3 text-xs text-crimson-deep"
         >
-          <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
-          <span>{studioError}</span>
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
+            <span>{studioError}</span>
+          </div>
+          {(activeJobId ||
+            (typeof window !== "undefined" &&
+              window.localStorage?.getItem(ACTIVE_STUDIO_JOB_STORAGE_KEY))) && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs border-crimson/40 text-crimson-deep hover:bg-crimson/10 shrink-0"
+              onClick={() => void handleResumeActiveJob()}
+            >
+              <RefreshCw className="mr-1.5 size-3" />
+              Resume Job Monitoring
+            </Button>
+          )}
         </div>
       )}
 

@@ -429,9 +429,9 @@ export function createMusicIntelligenceService(
   const getClient = options.getClient ?? (() => supabase);
   const fetchFn = options.fetchImpl ?? globalThis.fetch;
 
-  async function resolveAccessToken(): Promise<
-    { ok: true; token: string } | MusicIntelligenceResult<never>
-  > {
+  async function resolveAccessToken(
+    forceRefresh = false,
+  ): Promise<{ ok: true; token: string } | MusicIntelligenceResult<never>> {
     const client = getClient();
     if (!client) {
       return {
@@ -441,8 +441,28 @@ export function createMusicIntelligenceService(
       };
     }
 
+    if (forceRefresh) {
+      try {
+        const { data: refreshData, error: refreshErr } = await client.auth.refreshSession();
+        if (!refreshErr && refreshData.session?.access_token) {
+          return { ok: true, token: refreshData.session.access_token };
+        }
+      } catch {
+        // Fall back to getSession
+      }
+    }
+
     const { data, error } = await client.auth.getSession();
     if (error || !data.session?.access_token) {
+      // Try refreshSession once before declaring session missing
+      try {
+        const { data: refreshData, error: refreshErr } = await client.auth.refreshSession();
+        if (!refreshErr && refreshData.session?.access_token) {
+          return { ok: true, token: refreshData.session.access_token };
+        }
+      } catch {
+        // Fall through to error
+      }
       return {
         status: "error",
         code: "SESSION_MISSING",
@@ -452,12 +472,29 @@ export function createMusicIntelligenceService(
       };
     }
 
+    // Proactively refresh tokens nearing expiration (within 60s of expires_at)
+    const expiresAt = data.session.expires_at;
+    if (typeof expiresAt === "number") {
+      const nowSec = Math.floor(Date.now() / 1000);
+      if (expiresAt - nowSec < 60) {
+        try {
+          const { data: refreshData, error: refreshErr } = await client.auth.refreshSession();
+          if (!refreshErr && refreshData.session?.access_token) {
+            return { ok: true, token: refreshData.session.access_token };
+          }
+        } catch {
+          // Keep current token if refresh fails
+        }
+      }
+    }
+
     return { ok: true, token: data.session.access_token };
   }
 
   async function requestJson<T>(
     path: string,
     init: RequestInit & { requireAuth: boolean },
+    isRetry = false,
   ): Promise<MusicIntelligenceResult<T>> {
     const baseUrl = resolveBaseUrl();
     if (!baseUrl) {
@@ -504,6 +541,25 @@ export function createMusicIntelligenceService(
       });
 
       if (!response.ok) {
+        // If 401 occurs on an authenticated request, attempt a single session refresh & retry
+        if (response.status === 401 && init.requireAuth && !isRetry) {
+          const refreshed = await resolveAccessToken(true);
+          if ("ok" in refreshed) {
+            const retryHeaders = {
+              ...mergedHeaders,
+              Authorization: `Bearer ${refreshed.token}`,
+            };
+            const retryRes = await fetchFn(`${baseUrl}${path}`, {
+              ...init,
+              headers: retryHeaders,
+            });
+            if (retryRes.ok) {
+              const data = (await retryRes.json()) as T;
+              return { status: "ok", data };
+            }
+            return await parseErrorResponse(retryRes);
+          }
+        }
         return await parseErrorResponse(response);
       }
 
