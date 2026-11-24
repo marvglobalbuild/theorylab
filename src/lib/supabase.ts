@@ -57,10 +57,21 @@ function isPublishableKeyValid(rawKey: string): { valid: boolean; reason?: strin
 }
 
 function readDefaultEnv(): SupabaseEnvInput {
-  const env = import.meta.env;
   return {
-    VITE_SUPABASE_URL: env.VITE_SUPABASE_URL,
-    VITE_SUPABASE_PUBLISHABLE_KEY: env.VITE_SUPABASE_PUBLISHABLE_KEY,
+    VITE_SUPABASE_URL:
+      import.meta.env.VITE_SUPABASE_URL ??
+      (typeof process !== "undefined"
+        ? (process.env?.VITE_SUPABASE_URL || process.env?.SUPABASE_URL)
+        : undefined),
+    VITE_SUPABASE_PUBLISHABLE_KEY:
+      import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ??
+      import.meta.env.VITE_SUPABASE_ANON_KEY ??
+      (typeof process !== "undefined"
+        ? (process.env?.VITE_SUPABASE_PUBLISHABLE_KEY ||
+           process.env?.VITE_SUPABASE_ANON_KEY ||
+           process.env?.SUPABASE_PUBLISHABLE_KEY ||
+           process.env?.SUPABASE_ANON_KEY)
+        : undefined),
   };
 }
 

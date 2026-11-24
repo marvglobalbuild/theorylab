@@ -147,7 +147,10 @@ export function validateMusicEngineUrl(rawUrl: unknown): MusicEngineUrlValidatio
 }
 
 export function getMusicEngineBaseUrl(env?: MusicEngineEnvInput): string | null {
-  const raw = env ? env.VITE_MUSIC_ENGINE_URL : import.meta.env["VITE_MUSIC_ENGINE_URL"];
+  const raw =
+    env?.VITE_MUSIC_ENGINE_URL ??
+    import.meta.env.VITE_MUSIC_ENGINE_URL ??
+    (typeof process !== "undefined" ? process.env?.VITE_MUSIC_ENGINE_URL : undefined);
   return validateMusicEngineUrl(raw).url;
 }
 
