@@ -306,40 +306,68 @@ export function buildAnalysisResultFromAccompaniment(
   job: MusicProcessingJob,
   result: AccompanimentJobResult,
 ): AudioAnalysisResult {
-  const ma = result.musical_analysis;
-  const vp = result.vocal_pitch;
+  const ma = result?.musical_analysis;
+  const vp = result?.vocal_pitch;
   const durationMs =
-    result.mixing?.vocal_duration_ms ??
-    job.audio_metadata?.duration_ms ??
-    result.arrangement.duration_ms;
+    result?.mixing?.vocal_duration_ms ??
+    job?.audio_metadata?.duration_ms ??
+    result?.arrangement?.duration_ms ??
+    0;
   const sampleRateHz =
-    job.audio_metadata?.sample_rate_hz ?? result.synthesis.sample_rate_hz ?? 44100;
+    job?.audio_metadata?.sample_rate_hz ?? result?.synthesis?.sample_rate_hz ?? 44100;
 
   const validStability =
-    ma.tempo_stability === "steady" ||
-    ma.tempo_stability === "moderate_variation" ||
-    ma.tempo_stability === "rubato_or_uncertain" ||
-    ma.tempo_stability === "unavailable"
+    ma?.tempo_stability === "steady" ||
+    ma?.tempo_stability === "moderate_variation" ||
+    ma?.tempo_stability === "rubato_or_uncertain" ||
+    ma?.tempo_stability === "unavailable"
       ? ma.tempo_stability
       : "unavailable";
 
   const validReliability =
-    ma.reliability === "high" ||
-    ma.reliability === "medium" ||
-    ma.reliability === "low" ||
-    ma.reliability === "unreliable"
+    ma?.reliability === "high" ||
+    ma?.reliability === "medium" ||
+    ma?.reliability === "low" ||
+    ma?.reliability === "unreliable"
       ? ma.reliability
       : "medium";
 
   return {
-    tempo_bpm: ma.tempo_bpm,
-    tempo_confidence: ma.tempo_confidence,
+    tempo_bpm: ma?.tempo_bpm ?? result?.arrangement?.tempo_bpm ?? 120,
+    tempo_confidence: ma?.tempo_confidence ?? 0.8,
     tempo_stability: validStability,
-    time_signature: ma.time_signature ?? result.arrangement.time_signature ?? "4/4",
-    estimated_key: ma.estimated_key ?? result.arrangement.key,
-    key_root: result.arrangement.key_root ?? null,
-    scale: result.arrangement.scale ?? null,
-    key_confidence: ma.key_confidence,
+    time_signature: ma?.time_signature ?? result?.arrangement?.time_signature ?? "4/4",
+    estimated_key: ma?.estimated_key ?? result?.arrangement?.key ?? "C Major",
+    key_root: result?.arrangement?.key_root ?? null,
+    key_mode: result?.arrangement?.key_mode ?? "major",
+    pitch_range: vp
+      ? {
+          lowest_note: vp.lowest_note,
+          highest_note: vp.highest_note,
+          tessitura_low: vp.tessitura_low,
+          tessitura_high: vp.tessitura_high,
+          detected_voice_type: vp.detected_voice_type,
+          unvoiced_ratio: vp.unvoiced_ratio,
+        }
+      : null,
+    chord_chart:
+      result?.arrangement?.chords?.map((c) => ({
+        start_sec: c.start_sec,
+        end_sec: c.end_sec,
+        chord: c.chord,
+        root: c.root,
+        quality: c.quality,
+        bar: c.bar,
+        beat: c.beat,
+      })) ?? [],
+    arrangement_recommendation: {
+      suggested_style: result?.arrangement?.style ?? "classical_chamber",
+      confidence: 0.9,
+      rationale: "Synthesized from completed arrangement.",
+      compatible_styles: [result?.arrangement?.style ?? "classical_chamber"],
+    },
+    scale: result?.arrangement?.scale ?? null,
+    key_confidence: ma?.key_confidence ?? 0.8,
     tuning_offset_cents: null,
     beats: [],
     chords: [],
@@ -347,11 +375,11 @@ export function buildAnalysisResultFromAccompaniment(
     audio_duration_ms: durationMs,
     sample_rate_hz: sampleRateHz,
     reliability: validReliability,
-    reliability_score: ma.reliability_score,
+    reliability_score: ma?.reliability_score ?? 0.8,
     analysis_method: "restored_from_render_summary",
     is_heuristic: true,
     instrument_tags: [],
-    warnings: ma.warnings ?? [],
+    warnings: ma?.warnings ?? [],
     vocal_pitch: vp
       ? {
           mode: vp.mode === "polyphonic" ? "polyphonic" : "monophonic",

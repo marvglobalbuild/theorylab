@@ -418,32 +418,32 @@ export function MixingMasteringStage({
             <div className="px-4 py-3.5">
               <dt className="text-xs text-muted-foreground">Integrated Loudness</dt>
               <dd className="mt-1 font-display text-2xl tabular-nums text-foreground">
-                {masteringReport.output_metrics.integrated_lufs != null
+                {masteringReport.output_metrics?.integrated_lufs != null
                   ? `${masteringReport.output_metrics.integrated_lufs.toFixed(1)} LUFS`
                   : "—"}
               </dd>
               <dd className="mt-1 text-[11px] tabular-nums text-muted-foreground">
                 Input:{" "}
-                {masteringReport.input_metrics.integrated_lufs != null
+                {masteringReport.input_metrics?.integrated_lufs != null
                   ? `${masteringReport.input_metrics.integrated_lufs.toFixed(1)} LUFS`
                   : "—"}{" "}
-                · Target: {masteringReport.target_lufs.toFixed(1)} LUFS
+                · Target: {masteringReport.target_lufs != null ? `${masteringReport.target_lufs.toFixed(1)} LUFS` : "—"}
               </dd>
             </div>
 
             <div className="border-t border-border px-4 py-3.5 sm:border-t-0 sm:border-l">
               <dt className="text-xs text-muted-foreground">4× oversampled true-peak estimate</dt>
               <dd className="mt-1 font-display text-2xl tabular-nums text-foreground">
-                {masteringReport.output_metrics.true_peak_dbtp != null
+                {masteringReport.output_metrics?.true_peak_dbtp != null
                   ? `${masteringReport.output_metrics.true_peak_dbtp.toFixed(2)} dB`
                   : "—"}
               </dd>
               <dd className="mt-1 text-[11px] tabular-nums text-muted-foreground">
                 Sample peak:{" "}
-                {masteringReport.output_metrics.sample_peak_dbfs != null
+                {masteringReport.output_metrics?.sample_peak_dbfs != null
                   ? `${masteringReport.output_metrics.sample_peak_dbfs.toFixed(2)} dBFS`
                   : "—"}{" "}
-                · Ceiling {masteringReport.true_peak_ceiling_dbtp.toFixed(1)} dB
+                · Ceiling {masteringReport.true_peak_ceiling_dbtp != null ? `${masteringReport.true_peak_ceiling_dbtp.toFixed(1)} dB` : "—"}
               </dd>
             </div>
 
@@ -454,7 +454,7 @@ export function MixingMasteringStage({
               </dd>
               <dd className="mt-1 text-[11px] tabular-nums text-muted-foreground">
                 {masteringReport.limiting_applied
-                  ? `Limiting GR: ${masteringReport.limiting_gain_reduction_db.toFixed(2)} dB`
+                  ? `Limiting GR: ${masteringReport.limiting_gain_reduction_db != null ? masteringReport.limiting_gain_reduction_db.toFixed(2) : "0.00"} dB`
                   : "No limiting required"}
               </dd>
             </div>
@@ -505,14 +505,14 @@ export function MixingMasteringStage({
             </span>
           </div>
 
-          {masteringReport.warnings.length > 0 && (
+          {(masteringReport.warnings ?? []).length > 0 && (
             <div
               role="alert"
               className="rounded-[2px] border border-crimson/40 bg-crimson/5 px-4 py-3 text-xs text-crimson-deep space-y-1"
             >
               <p className="font-medium">Mastering warnings</p>
               <ul className="list-disc pl-5 space-y-0.5">
-                {masteringReport.warnings.map((w, idx) => (
+                {(masteringReport.warnings ?? []).map((w, idx) => (
                   <li key={idx}>{w}</li>
                 ))}
               </ul>

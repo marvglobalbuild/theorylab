@@ -170,7 +170,7 @@ export function AudioPreviewDeck({
       exportsList.find((e) => e.format === "mp3") ??
       exportsList[0];
     if (preferred) return preferred.object_path;
-    const art = job.artifacts.find((a) => a.artifact_type.startsWith("master_audio_"));
+    const art = (job.artifacts ?? []).find((a) => a.artifact_type.startsWith("master_audio_"));
     return art?.object_path ?? null;
   }, [job, result]);
 
@@ -335,13 +335,11 @@ export function AudioPreviewDeck({
   }, [masterVolume, stemControls, includeVocalInStemMix, computeStemEffectiveGain]);
 
   const activeAssetKey =
-    mode === "final_mix"
+    mode === "final_mix" && hasFinalMix
       ? "final_mix"
       : mode === "original_vocal"
         ? "original_vocal"
-        : mode === "accompaniment"
-          ? "accompaniment"
-          : "accompaniment";
+        : "accompaniment";
 
   const introOffsetMs = result?.mixing?.intro_offset_ms ?? 0;
   const introOffsetSec = introOffsetMs / 1000;
@@ -690,9 +688,10 @@ export function AudioPreviewDeck({
           </h2>
         </div>
         <p className="text-xs text-muted-foreground tabular-nums">
-          {result.arrangement.style} · {result.arrangement.key} ·{" "}
-          {result.arrangement.tempo_bpm.toFixed(1)} BPM · {result.arrangement.total_bars} bars ·{" "}
-          {result.synthesis.soundfont_name ?? result.synthesis.engine}
+          {result.arrangement?.style ?? "Arrangement"} · {result.arrangement?.key ?? "C Major"} ·{" "}
+          {result.arrangement?.tempo_bpm != null ? `${result.arrangement.tempo_bpm.toFixed(1)} BPM` : "—"} ·{" "}
+          {result.arrangement?.total_bars != null ? `${result.arrangement.total_bars} bars` : ""} ·{" "}
+          {result.synthesis?.soundfont_name ?? result.synthesis?.engine ?? "FluidSynth"}
         </p>
       </div>
 

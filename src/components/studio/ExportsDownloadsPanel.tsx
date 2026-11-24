@@ -92,11 +92,18 @@ export function ExportsDownloadsPanel({ job, result, service }: ExportsDownloads
       formatLabel: "WAV",
       sizeBytes: result.synthesis.size_bytes,
       durationMs: result.synthesis.duration_ms,
-      technicalDetail: `${(result.synthesis.sample_rate_hz / 1000).toFixed(1)} kHz · Stereo · ${result.synthesis.soundfont_name ?? "FluidSynth"}`,
+      technicalDetail: `${result.synthesis.sample_rate_hz != null ? (result.synthesis.sample_rate_hz / 1000).toFixed(1) : "44.1"} kHz · Stereo · ${result.synthesis.soundfont_name ?? "FluidSynth"}`,
     });
   }
 
   if (result.midi?.object_path) {
+    const trackCount = Array.isArray(result.midi.instrument_tracks)
+      ? result.midi.instrument_tracks.length
+      : typeof result.midi.instrument_tracks === "number"
+        ? result.midi.instrument_tracks
+        : 0;
+    const tempoStr =
+      result.midi.tempo_bpm != null ? `${result.midi.tempo_bpm.toFixed(1)} BPM` : "Tempo tracked";
     items.push({
       id: `midi-${result.midi.object_path}`,
       category: "MIDI",
@@ -105,9 +112,9 @@ export function ExportsDownloadsPanel({ job, result, service }: ExportsDownloads
       objectPath: result.midi.object_path,
       formatLabel: "MIDI",
       sizeBytes:
-        job.artifacts.find((a) => a.object_path === result.midi.object_path)?.size_bytes ?? null,
+        (job.artifacts ?? []).find((a) => a.object_path === result.midi.object_path)?.size_bytes ?? null,
       durationMs: result.midi.duration_ms,
-      technicalDetail: `${result.midi.instrument_tracks} tracks · ${result.midi.note_count} notes · ${result.midi.tempo_bpm.toFixed(1)} BPM`,
+      technicalDetail: `${trackCount} tracks · ${result.midi.note_count ?? 0} notes · ${tempoStr}`,
     });
   }
 
@@ -126,7 +133,7 @@ export function ExportsDownloadsPanel({ job, result, service }: ExportsDownloads
   }
 
   if (result.mixing?.original_vocal_copy_object_path) {
-    const vocalArt = job.artifacts.find(
+    const vocalArt = (job.artifacts ?? []).find(
       (a) => a.object_path === result.mixing?.original_vocal_copy_object_path,
     );
     items.push({
@@ -138,7 +145,7 @@ export function ExportsDownloadsPanel({ job, result, service }: ExportsDownloads
       formatLabel: "WAV",
       sizeBytes: vocalArt?.size_bytes ?? null,
       durationMs: result.mixing.vocal_duration_ms,
-      technicalDetail: `${(result.mixing.sample_rate_hz / 1000).toFixed(1)} kHz · Unmodified original vocal`,
+      technicalDetail: `${result.mixing.sample_rate_hz != null ? (result.mixing.sample_rate_hz / 1000).toFixed(1) : "44.1"} kHz · Unmodified original vocal`,
     });
   }
 

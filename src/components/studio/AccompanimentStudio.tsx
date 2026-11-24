@@ -24,6 +24,7 @@ import { JobStatusPanel } from "./JobStatusPanel";
 import { MixingMasteringStage } from "./MixingMasteringStage";
 import { ProjectHistoryPanel } from "./ProjectHistoryPanel";
 import { ProjectUploadStage } from "./ProjectUploadStage";
+import { StudioErrorBoundary } from "./StudioErrorBoundary";
 import {
   DEFAULT_ARRANGEMENT_CONFIG,
   DEFAULT_MIX_CONFIG,
@@ -442,6 +443,12 @@ export function AccompanimentStudio({
       } else {
         setStudioError(res.message);
       }
+    } catch (err) {
+      setStudioError(
+        err instanceof Error
+          ? err.message
+          : "An unexpected error occurred while initiating accompaniment generation.",
+      );
     } finally {
       setSubmittingJob(false);
       submitLockRef.current = false;
@@ -799,35 +806,41 @@ export function AccompanimentStudio({
           />
 
           {/* Stage E: Audio Preview & Arrangement Review */}
-          <AudioPreviewDeck
-            job={accompanimentJob}
-            result={accompanimentResult}
-            service={service}
-            localVocalFile={selectedFile}
-            onSyncStemControlsToMix={handleSyncStemControlsToMix}
-            onBeforePlay={handleStage5BeforePlay}
-            registerStopPlayback={handleRegisterStage5Stop}
-          />
+          <StudioErrorBoundary fallbackTitle="Audio Preview Deck notice">
+            <AudioPreviewDeck
+              job={accompanimentJob}
+              result={accompanimentResult}
+              service={service}
+              localVocalFile={selectedFile}
+              onSyncStemControlsToMix={handleSyncStemControlsToMix}
+              onBeforePlay={handleStage5BeforePlay}
+              registerStopPlayback={handleRegisterStage5Stop}
+            />
+          </StudioErrorBoundary>
 
           {/* Stage F: Mixing, Mastering & Format Controls */}
-          <MixingMasteringStage
-            config={mixConfig}
-            onChange={setMixConfig}
-            selectedInstruments={arrangementConfig.selected_instruments}
-            mixingSummary={accompanimentResult?.mixing ?? null}
-            masteringReport={accompanimentResult?.mastering ?? null}
-            disabled={Boolean(isJobRunning || uploading)}
-            canRender={canRunGeneration && renderingCapabilityReady}
-            isSubmitting={submittingJob}
-            onRenderMaster={handleGenerateAndMaster}
-          />
+          <StudioErrorBoundary fallbackTitle="Mixing & Mastering stage notice">
+            <MixingMasteringStage
+              config={mixConfig}
+              onChange={setMixConfig}
+              selectedInstruments={arrangementConfig.selected_instruments}
+              mixingSummary={accompanimentResult?.mixing ?? null}
+              masteringReport={accompanimentResult?.mastering ?? null}
+              disabled={Boolean(isJobRunning || uploading)}
+              canRender={canRunGeneration && renderingCapabilityReady}
+              isSubmitting={submittingJob}
+              onRenderMaster={handleGenerateAndMaster}
+            />
+          </StudioErrorBoundary>
 
           {/* Stage G: Private Exports & Downloads */}
-          <ExportsDownloadsPanel
-            job={accompanimentJob}
-            result={accompanimentResult}
-            service={service}
-          />
+          <StudioErrorBoundary fallbackTitle="Exports & Downloads panel notice">
+            <ExportsDownloadsPanel
+              job={accompanimentJob}
+              result={accompanimentResult}
+              service={service}
+            />
+          </StudioErrorBoundary>
 
           {/* Quick shortcut to project history at bottom */}
           <div className="flex items-center justify-between border-t border-border pt-4 text-xs text-muted-foreground">
