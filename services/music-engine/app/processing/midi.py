@@ -57,6 +57,284 @@ _MIDO_MINOR_KEYS: dict[str, str] = {
 }
 
 
+class ParsedMIDITrack(BaseModel):
+    track_index: int
+    track_name: str
+    channel: int = Field(default=0, ge=0, le=15)
+    program: int = Field(default=0, ge=0, le=127)
+    is_percussion: bool = False
+    notes: list[NoteEvent] = Field(default_factory=list)
+
+
+class ParsedMIDISong(BaseModel):
+    tempo_bpm: float
+    time_signature: str
+    key_signature: str | None = None
+    duration_ms: int
+    ticks_per_beat: int
+    tracks: list[ParsedMIDITrack] = Field(default_factory=list)
+    melody_notes: list[NoteEvent] = Field(default_factory=list)
+
+
+def parse_midi_file(midi_path: Path) -> ParsedMIDISong:
+    """
+    Parses a Standard MIDI File (.mid/.midi) non-destructively:
+      - Reads tempo changes, time signatures, key signatures.
+      - Pairs note_on and note_off events with accurate millisecond timings.
+      - Preserves individual track identities, GM programs, channels, and velocities.
+      - Identifies principal melodic voice for the arrangement engine.
+    """
+    mid = mido.MidiFile(str(midi_path))
+    ticks_per_beat = mid.ticks_per_beat or 480
+
+    # 1. First pass: extract tempo, time signature, and key signature
+    tempos: list[tuple[int, int]] = []  # (abs_tick, tempo_us_per_beat)
+    time_signatures: list[tuple[int, str]] = []  # (abs_tick, "num/den")
+    key_signatures: list[str] = []
+
+    for trk in mid.tracks:
+        abs_tick = 0
+        for msg in trk:
+            abs_tick += msg.time
+            if msg.type == "set_tempo":
+                tempos.append((abs_tick, msg.tempo))
+            elif msg.type == "time_signature":
+                time_signatures.append((abs_tick, f"{msg.numerator}/{msg.denominator}"))
+            elif msg.type == "key_signature":
+                key_signatures.append(msg.key)
+
+    tempos.sort(key=lambda x: x[0])
+    if not tempos:
+        tempos = [(0, 500000)]  # Default 120 BPM
+
+    time_signature = time_signatures[0][1] if time_signatures else "4/4"
+    key_signature = key_signatures[0] if key_signatures else None
+    bpm = round(mido.tempo2bpm(tempos[0][1]), 2)
+
+    def tick_to_ms(target_tick: int) -> int:
+        if target_tick <= 0:
+            return 0
+        elapsed_sec = 0.0
+        prev_tick = 0
+        current_tempo = tempos[0][1]
+
+        for tempo_tick, tempo_val in tempos:
+            if target_tick <= tempo_tick:
+                break
+            delta = tempo_tick - prev_tick
+            elapsed_sec += mido.tick2second(delta, ticks_per_beat, current_tempo)
+            prev_tick = tempo_tick
+            current_tempo = tempo_val
+
+        remaining_delta = target_tick - prev_tick
+        elapsed_sec += mido.tick2second(remaining_delta, ticks_per_beat, current_tempo)
+        return int(round(elapsed_sec * 1000.0))
+
+    # 2. Second pass: parse each track's notes and metadata
+    parsed_tracks: list[ParsedMIDITrack] = []
+    all_melodic_notes: list[NoteEvent] = []
+
+    for trk_idx, trk in enumerate(mid.tracks):
+        abs_tick = 0
+        track_name = f"Track {trk_idx + 1}"
+        program = 0
+        channel = 0
+        is_percussion = False
+
+        active_notes: dict[tuple[int, int], tuple[int, int]] = {}
+        track_notes: list[NoteEvent] = []
+
+        for msg in trk:
+            abs_tick += msg.time
+            msg_ms = tick_to_ms(abs_tick)
+
+            if msg.type == "track_name":
+                cleaned = msg.name.strip()
+                if cleaned:
+                    track_name = cleaned
+            elif msg.type == "program_change":
+                program = msg.program
+                channel = msg.channel
+                if channel == 9:
+                    is_percussion = True
+            elif msg.type == "note_on":
+                ch = msg.channel
+                pitch = msg.note
+                vel = msg.velocity
+                if ch == 9:
+                    is_percussion = True
+                if vel > 0:
+                    active_notes[(ch, pitch)] = (msg_ms, vel)
+                else:
+                    if (ch, pitch) in active_notes:
+                        start_ms, start_vel = active_notes.pop((ch, pitch))
+                        end_ms = max(start_ms + 40, msg_ms)
+                        ev = NoteEvent(
+                            start_ms=start_ms,
+                            end_ms=end_ms,
+                            midi_pitch=pitch,
+                            velocity=start_vel,
+                            confidence=1.0,
+                            voice=track_name,
+                        )
+                        track_notes.append(ev)
+            elif msg.type == "note_off":
+                ch = msg.channel
+                pitch = msg.note
+                if ch == 9:
+                    is_percussion = True
+                if (ch, pitch) in active_notes:
+                    start_ms, start_vel = active_notes.pop((ch, pitch))
+                    end_ms = max(start_ms + 40, msg_ms)
+                    ev = NoteEvent(
+                        start_ms=start_ms,
+                        end_ms=end_ms,
+                        midi_pitch=pitch,
+                        velocity=start_vel,
+                        confidence=1.0,
+                        voice=track_name,
+                    )
+                    track_notes.append(ev)
+
+        final_track_ms = tick_to_ms(abs_tick)
+        for (ch, pitch), (start_ms, start_vel) in active_notes.items():
+            end_ms = max(start_ms + 80, final_track_ms)
+            track_notes.append(
+                NoteEvent(
+                    start_ms=start_ms,
+                    end_ms=end_ms,
+                    midi_pitch=pitch,
+                    velocity=start_vel,
+                    confidence=1.0,
+                    voice=track_name,
+                )
+            )
+
+        track_notes.sort(key=lambda n: n.start_ms)
+
+        if track_notes or trk_idx > 0 or program > 0:
+            parsed_trk = ParsedMIDITrack(
+                track_index=trk_idx,
+                track_name=track_name,
+                channel=channel,
+                program=program,
+                is_percussion=is_percussion,
+                notes=track_notes,
+            )
+            parsed_tracks.append(parsed_trk)
+            if not is_percussion:
+                all_melodic_notes.extend(track_notes)
+
+    # 3. Identify principal melody voice
+    melody_notes: list[NoteEvent] = []
+    melodic_tracks = [t for t in parsed_tracks if not t.is_percussion and t.notes]
+    if melodic_tracks:
+        best_track = max(
+            melodic_tracks,
+            key=lambda t: (len(t.notes), sum(n.midi_pitch for n in t.notes) / len(t.notes)),
+        )
+        melody_notes = best_track.notes
+    elif all_melodic_notes:
+        melody_notes = all_melodic_notes
+
+    melody_notes.sort(key=lambda n: n.start_ms)
+
+    duration_ms = int(round(mid.length * 1000.0))
+    if duration_ms <= 0 and parsed_tracks:
+        duration_ms = max((max((n.end_ms for n in t.notes), default=0) for t in parsed_tracks), default=1000)
+
+    # Infer diatonic key if missing
+    if not key_signature and melody_notes:
+        pc_counts = [0] * 12
+        for n in melody_notes:
+            pc_counts[n.midi_pitch % 12] += max(1, n.end_ms - n.start_ms)
+        best_root = max(range(12), key=lambda i: pc_counts[i])
+        root_names = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
+        key_signature = f"{root_names[best_root]} major"
+
+    return ParsedMIDISong(
+        tempo_bpm=bpm,
+        time_signature=time_signature,
+        key_signature=key_signature,
+        duration_ms=duration_ms,
+        ticks_per_beat=ticks_per_beat,
+        tracks=parsed_tracks,
+        melody_notes=melody_notes,
+    )
+
+
+def parsed_midi_to_analysis_and_pitch(
+    parsed: ParsedMIDISong,
+) -> tuple[AudioAnalysisResult, PitchExtractionResult]:
+    """Converts parsed MIDI structures directly into harmonic analysis and pitch representations."""
+    from app.processing.interfaces import AudioAnalysisResult, BeatMarker, PitchExtractionResult
+
+    # Generate beat grid
+    ms_per_beat = (60000.0 / parsed.tempo_bpm) if parsed.tempo_bpm > 0 else 500.0
+    beats: list[BeatMarker] = []
+    num, den = parse_time_signature(parsed.time_signature)
+    total_beats = max(1, int(parsed.duration_ms / ms_per_beat) + 1)
+    for b_idx in range(total_beats):
+        b_time = int(b_idx * ms_per_beat)
+        if b_time > parsed.duration_ms:
+            break
+        beat_num = (b_idx % num) + 1
+        bar_num = (b_idx // num) + 1
+        beats.append(
+            BeatMarker(
+                time_ms=b_time,
+                beat_number=beat_num,
+                bar_number=bar_num,
+                is_downbeat=(beat_num == 1),
+            )
+        )
+
+    key_label = parsed.key_signature or "C major"
+    analysis_res = AudioAnalysisResult(
+        tempo_bpm=parsed.tempo_bpm,
+        tempo_confidence=1.0,
+        tempo_stability="steady",
+        time_signature=parsed.time_signature,
+        estimated_key=key_label,
+        key_confidence=0.98,
+        beats=beats,
+        chords=[],
+        audio_duration_ms=parsed.duration_ms,
+        sample_rate_hz=44100,
+        reliability="high",
+        reliability_score=0.99,
+        analysis_method="midi_symbolic_parser",
+        is_heuristic=False,
+        warnings=[],
+    )
+
+    notes = parsed.melody_notes
+    pitch_range = (
+        (min(n.midi_pitch for n in notes), max(n.midi_pitch for n in notes))
+        if notes
+        else (60, 72)
+    )
+
+    pitch_res = PitchExtractionResult(
+        mode="polyphonic",
+        hop_ms=10,
+        contours=[],
+        voiced_ratio=1.0 if notes else 0.0,
+        mean_confidence=1.0,
+        note_events=notes,
+        pitch_range_midi=pitch_range,
+        voiced_regions=[],
+        unvoiced_regions=[],
+        audio_duration_ms=parsed.duration_ms,
+        sample_rate_hz=44100,
+        extractor_method="midi_symbolic_parser",
+        monophonic_only_notice="Direct symbolic MIDI input; bypasses monophonic vocal pYIN pitch extraction.",
+        warnings=[],
+    )
+
+    return analysis_res, pitch_res
+
+
 class MIDITrackSpec(BaseModel):
     instrument_id: str
     track_name: str

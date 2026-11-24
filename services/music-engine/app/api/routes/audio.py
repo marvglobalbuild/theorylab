@@ -74,12 +74,17 @@ async def validate_audio_upload(
     try:
         temp_file.write_bytes(raw_bytes)
         checksum = compute_sha256(temp_file)
+        max_dur = (
+            settings.music_engine_max_midi_duration_seconds
+            if detected_format_str in ("mid", "midi")
+            else settings.music_engine_max_duration_seconds
+        )
         metadata = await probe_audio_stream(
             file_path=temp_file,
             detected_format=AudioFormat(detected_format_str),
             sha256_checksum=checksum,
             size_bytes=size_bytes,
-            max_duration_seconds=settings.music_engine_max_duration_seconds,
+            max_duration_seconds=max_dur,
             ffprobe_bin=settings.ffprobe_bin,
         )
         return AudioValidationResponse(valid=True, metadata=metadata)
@@ -125,12 +130,17 @@ async def upload_private_audio(
     try:
         temp_file.write_bytes(raw_bytes)
         checksum = compute_sha256(temp_file)
+        max_dur = (
+            settings.music_engine_max_midi_duration_seconds
+            if detected_format_str in ("mid", "midi")
+            else settings.music_engine_max_duration_seconds
+        )
         metadata = await probe_audio_stream(
             file_path=temp_file,
             detected_format=AudioFormat(detected_format_str),
             sha256_checksum=checksum,
             size_bytes=size_bytes,
-            max_duration_seconds=settings.music_engine_max_duration_seconds,
+            max_duration_seconds=max_dur,
             ffprobe_bin=settings.ffprobe_bin,
         )
 

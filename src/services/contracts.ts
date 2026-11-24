@@ -318,7 +318,23 @@ export type MusicJobType =
 
 export type MusicJobStatus = "queued" | "processing" | "completed" | "failed" | "cancelled";
 
-export type SupportedAudioFormat = "wav" | "mp3" | "flac" | "m4a" | "aac" | "ogg" | "webm";
+export type SupportedAudioFormat =
+  | "wav"
+  | "mp3"
+  | "flac"
+  | "m4a"
+  | "aac"
+  | "ogg"
+  | "opus"
+  | "webm"
+  | "mp4"
+  | "mov"
+  | "mkv"
+  | "avi"
+  | "mid"
+  | "midi";
+
+export type SupportedMediaCategory = "audio" | "video" | "midi";
 
 export interface AudioSourceRef {
   storage_backend: "supabase" | "local";
@@ -338,6 +354,7 @@ export interface TrimWindow {
 export interface VerifiedAudioMetadata {
   detected_format: SupportedAudioFormat;
   mime_type: string;
+  media_category?: SupportedMediaCategory;
   size_bytes: number;
   sha256_checksum: string;
   duration_ms: number;
@@ -347,6 +364,9 @@ export interface VerifiedAudioMetadata {
   bit_rate_bps: number | null;
   bit_depth: number | null;
   original_preserved: boolean;
+  video_extracted?: boolean;
+  midi_track_count?: number | null;
+  midi_note_count?: number | null;
 }
 
 export interface MusicEngineErrorDetail {
@@ -388,6 +408,12 @@ export interface MusicEngineCapabilities {
   limits: {
     max_file_size_bytes: number;
     max_duration_seconds: number;
+    max_audio_file_size_bytes?: number;
+    max_video_file_size_bytes?: number;
+    max_midi_file_size_bytes?: number;
+    max_audio_duration_seconds?: number;
+    max_video_duration_seconds?: number;
+    max_midi_duration_seconds?: number;
     max_concurrent_jobs_per_user: number;
     target_internal_sample_rate_hz: number;
     realistic_sample_playback_required: boolean;

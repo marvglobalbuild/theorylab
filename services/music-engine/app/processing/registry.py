@@ -422,6 +422,12 @@ class ProcessingEngineRegistry:
             limits=EngineLimits(
                 max_file_size_bytes=self._settings.music_engine_max_file_size_bytes,
                 max_duration_seconds=self._settings.music_engine_max_duration_seconds,
+                max_audio_file_size_bytes=self._settings.music_engine_max_audio_file_size_bytes,
+                max_video_file_size_bytes=self._settings.music_engine_max_video_file_size_bytes,
+                max_midi_file_size_bytes=self._settings.music_engine_max_midi_file_size_bytes,
+                max_audio_duration_seconds=self._settings.music_engine_max_audio_duration_seconds,
+                max_video_duration_seconds=self._settings.music_engine_max_video_duration_seconds,
+                max_midi_duration_seconds=self._settings.music_engine_max_midi_duration_seconds,
                 max_concurrent_jobs_per_user=self._settings.music_engine_max_concurrent_jobs_per_user,
             ),
             job_types=job_types,

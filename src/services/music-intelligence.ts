@@ -19,6 +19,8 @@ import type {
 
 export const DEFAULT_AUDIO_BUCKET = "sonora-audio";
 export const DEFAULT_MAX_AUDIO_FILE_SIZE_BYTES = 100 * 1024 * 1024;
+export const DEFAULT_MAX_VIDEO_FILE_SIZE_BYTES = 250 * 1024 * 1024;
+export const DEFAULT_MAX_MIDI_FILE_SIZE_BYTES = 20 * 1024 * 1024;
 
 export const SUPPORTED_AUDIO_EXTENSIONS = [
   ".wav",
@@ -29,7 +31,27 @@ export const SUPPORTED_AUDIO_EXTENSIONS = [
   ".aac",
   ".ogg",
   ".oga",
+  ".opus",
   ".webm",
+] as const;
+
+export const SUPPORTED_VIDEO_EXTENSIONS = [
+  ".mp4",
+  ".mov",
+  ".webm",
+  ".mkv",
+  ".avi",
+] as const;
+
+export const SUPPORTED_MIDI_EXTENSIONS = [
+  ".mid",
+  ".midi",
+] as const;
+
+export const ALL_SUPPORTED_MEDIA_EXTENSIONS = [
+  ...SUPPORTED_AUDIO_EXTENSIONS,
+  ...SUPPORTED_VIDEO_EXTENSIONS,
+  ...SUPPORTED_MIDI_EXTENSIONS,
 ] as const;
 
 export const SUPPORTED_AUDIO_MIME_TYPES = [
@@ -48,7 +70,27 @@ export const SUPPORTED_AUDIO_MIME_TYPES = [
   "audio/aacp",
   "audio/ogg",
   "application/ogg",
+  "audio/opus",
   "audio/webm",
+] as const;
+
+export const SUPPORTED_VIDEO_MIME_TYPES = [
+  "video/mp4",
+  "application/mp4",
+  "video/quicktime",
+  "video/webm",
+  "video/x-matroska",
+  "video/matroska",
+  "video/x-msvideo",
+  "video/avi",
+  "video/msvideo",
+] as const;
+
+export const SUPPORTED_MIDI_MIME_TYPES = [
+  "audio/midi",
+  "audio/x-midi",
+  "application/x-midi",
+  "audio/mid",
 ] as const;
 
 export interface MusicEngineEnvInput {
@@ -132,33 +174,74 @@ export function validateAudioFileForUpload(
   file: Pick<File, "name" | "size" | "type">,
   maxSizeBytes: number = DEFAULT_MAX_AUDIO_FILE_SIZE_BYTES,
   allowedFormats?: readonly string[],
+  mediaCategoryFilter?: "audio" | "video" | "midi" | "all",
 ): AudioFilePrevalidationResult {
   if (!file || file.size <= 0) {
     return {
       valid: false,
       code: "EMPTY_AUDIO_FILE",
-      message: "Selected audio file is empty (0 bytes).",
-    };
-  }
-  if (file.size > maxSizeBytes) {
-    return {
-      valid: false,
-      code: "AUDIO_FILE_TOO_LARGE",
-      message: `Audio file exceeds the maximum allowed size (${Math.round(maxSizeBytes / (1024 * 1024))} MB).`,
+      message: "Selected file is empty (0 bytes).",
     };
   }
 
   const sanitized = sanitizeAudioFilename(file.name);
   const dotIdx = sanitized.lastIndexOf(".");
   const ext = dotIdx >= 0 ? sanitized.slice(dotIdx).toLowerCase() : "";
-
   const normalizedMime = (file.type || "").split(";")[0]?.trim().toLowerCase() ?? "";
-  if (normalizedMime.startsWith("video/")) {
+
+  const isMidi =
+    ext === ".mid" ||
+    ext === ".midi" ||
+    normalizedMime === "audio/midi" ||
+    normalizedMime === "audio/x-midi" ||
+    normalizedMime === "application/x-midi";
+
+  const isVideo =
+    !isMidi &&
+    (normalizedMime.startsWith("video/") ||
+      ext === ".mp4" ||
+      ext === ".mov" ||
+      ext === ".mkv" ||
+      ext === ".avi");
+
+  // Check if video is rejected by audio-only capabilities or filter
+  if (isVideo) {
+    const hasVideoSupport =
+      mediaCategoryFilter === "video" ||
+      mediaCategoryFilter === "all" ||
+      (allowedFormats && allowedFormats.some((f) => ["mp4", "mov", "mkv", "avi"].includes(f.toLowerCase())));
+
+    if (!hasVideoSupport) {
+      return {
+        valid: false,
+        code: "VIDEO_NOT_SUPPORTED",
+        message:
+          "Video uploads are not supported. Upload an audio recording (WAV, MP3, FLAC, M4A, AAC, OGG, or WebM audio) or switch to the Video tab.",
+      };
+    }
+  }
+
+  if (isMidi && mediaCategoryFilter === "audio") {
     return {
       valid: false,
-      code: "VIDEO_NOT_SUPPORTED",
-      message:
-        "Video uploads are not supported. Upload an audio recording (WAV, MP3, FLAC, M4A, AAC, OGG, or WebM audio).",
+      code: "MIDI_NOT_SUPPORTED_IN_AUDIO_MODE",
+      message: "MIDI files should be uploaded using the MIDI tab.",
+    };
+  }
+
+  const effectiveMaxBytes = isVideo
+    ? DEFAULT_MAX_VIDEO_FILE_SIZE_BYTES
+    : isMidi
+      ? DEFAULT_MAX_MIDI_FILE_SIZE_BYTES
+      : maxSizeBytes;
+
+  if (file.size > effectiveMaxBytes) {
+    const categoryLabel = isVideo ? "Video" : isMidi ? "MIDI" : "Audio";
+    const maxMb = Math.round(effectiveMaxBytes / (1024 * 1024));
+    return {
+      valid: false,
+      code: isVideo ? "VIDEO_FILE_TOO_LARGE" : isMidi ? "MIDI_FILE_TOO_LARGE" : "AUDIO_FILE_TOO_LARGE",
+      message: `${categoryLabel} file exceeds the maximum allowed size (${maxMb} MB).`,
     };
   }
 
@@ -167,18 +250,23 @@ export function validateAudioFileForUpload(
         const lower = fmt.toLowerCase();
         if (lower === "wav") return [".wav", ".wave"];
         if (lower === "ogg") return [".ogg", ".oga"];
+        if (lower === "midi" || lower === "mid") return [".mid", ".midi"];
         return [`.${lower}`];
       })
-    : [...SUPPORTED_AUDIO_EXTENSIONS];
+    : [...ALL_SUPPORTED_MEDIA_EXTENSIONS];
+
+  const allowedMimeList: readonly string[] = [
+    ...SUPPORTED_AUDIO_MIME_TYPES,
+    ...SUPPORTED_VIDEO_MIME_TYPES,
+    ...SUPPORTED_MIDI_MIME_TYPES,
+  ];
 
   const extAllowed = allowedExtList.includes(ext);
-  const mimeAllowed =
-    normalizedMime.length === 0 ||
-    (SUPPORTED_AUDIO_MIME_TYPES as readonly string[]).includes(normalizedMime);
+  const mimeAllowed = normalizedMime.length === 0 || allowedMimeList.includes(normalizedMime);
 
   const labelList = allowedFormats?.length
     ? allowedFormats.map((f) => f.toUpperCase()).join(", ")
-    : "WAV, MP3, FLAC, M4A, AAC, OGG, or WebM";
+    : "WAV, MP3, FLAC, M4A, AAC, OGG, OPUS, WebM, MP4, MOV, MKV, AVI, or MIDI";
 
   if (!extAllowed && !mimeAllowed) {
     return {

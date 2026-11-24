@@ -5,6 +5,7 @@ import shutil
 from pathlib import Path
 
 from app.audio.validation import (
+    get_media_category,
     probe_audio_stream,
     sniff_audio_format_from_bytes,
     validate_declared_extension_and_mime,
@@ -62,10 +63,7 @@ class DefaultAudioIngestionService(AudioIngestionInterface):
             )
 
         object_info = await self._storage.head_object(source_ref.bucket, normalized_path)
-        validate_file_size(
-            object_info.size_bytes,
-            self._settings.music_engine_max_file_size_bytes,
-        )
+        actual_size = object_info.size_bytes
 
         workspace_dir.mkdir(parents=True, exist_ok=True)
         suffix = Path(source_ref.original_filename or normalized_path).suffix.lower() or ".audio"
@@ -77,15 +75,20 @@ class DefaultAudioIngestionService(AudioIngestionInterface):
             destination=staged_original_copy,
         )
 
-        actual_size = staged_original_copy.stat().st_size
-        validate_file_size(actual_size, self._settings.music_engine_max_file_size_bytes)
-
         with staged_original_copy.open("rb") as handle:
             header = handle.read(64)
 
         detected_format = sniff_audio_format_from_bytes(
             header=header,
             filename=source_ref.original_filename or normalized_path,
+        )
+        category = get_media_category(detected_format)
+        validate_file_size(actual_size, self._settings.music_engine_max_file_size_bytes, category=category)
+
+        max_dur = (
+            self._settings.music_engine_max_midi_duration_seconds
+            if category.value == "midi"
+            else self._settings.music_engine_max_duration_seconds
         )
 
         checksum = compute_sha256(staged_original_copy)
@@ -94,7 +97,7 @@ class DefaultAudioIngestionService(AudioIngestionInterface):
             detected_format=detected_format,
             sha256_checksum=checksum,
             size_bytes=actual_size,
-            max_duration_seconds=self._settings.music_engine_max_duration_seconds,
+            max_duration_seconds=max_dur,
             ffprobe_bin=self._settings.ffprobe_bin,
         )
 
@@ -120,15 +123,16 @@ def validate_uploaded_bytes_metadata(
     declared_mime_type: str | None,
     max_size_bytes: int,
 ) -> tuple[str, int]:
-    """Helper for direct audio upload validation before writing to workspace/storage."""
+    """Helper for direct audio/video/MIDI upload validation before writing to workspace/storage."""
     validate_declared_extension_and_mime(filename, declared_mime_type)
-    validate_file_size(len(data), max_size_bytes)
-    if len(data) < 12:
+    if len(data) < 4:
         raise AudioValidationError(
-            "Uploaded audio data is too short to contain a valid audio header.",
+            "Uploaded media data is too short to contain a valid header.",
             code="CORRUPTED_OR_EMPTY_AUDIO",
         )
     detected = sniff_audio_format_from_bytes(data[:64], filename=filename)
+    category = get_media_category(detected)
+    validate_file_size(len(data), max_size_bytes, category=category)
     return detected.value, len(data)
 
 

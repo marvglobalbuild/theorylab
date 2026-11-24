@@ -49,54 +49,128 @@ class FFmpegAudioDecoder(AudioDecodingInterface):
             )
 
         output_wav = workspace_dir / "decoded_canonical.wav"
-        ffmpeg_path = shutil.which(self._settings.ffmpeg_bin) or (
-            self._settings.ffmpeg_bin if Path(self._settings.ffmpeg_bin).exists() else None
-        )
 
-        if ffmpeg_path:
-            cmd = [
-                ffmpeg_path,
-                "-y",
-                "-v",
-                "error",
-            ]
-            if trim_window is not None:
-                cmd.extend(["-ss", f"{trim_window.start_ms / 1000.0:.3f}"])
-                if trim_window.end_ms is not None:
-                    cmd.extend(["-to", f"{trim_window.end_ms / 1000.0:.3f}"])
-            cmd.extend(
-                [
+        # Special pathway: MIDI files are synthesized via FluidSynth + SoundFont
+        if ingested.metadata.detected_format in {AudioFormat.MID, AudioFormat.MIDI}:
+            from app.processing.instruments import InstrumentResourceManager
+            inst_mgr = InstrumentResourceManager(self._settings)
+            exe = inst_mgr.resolve_fluidsynth_executable()
+            sf_status = inst_mgr.resolve_sound_library()
+
+            rendered_successfully = False
+            if exe and sf_status.available and sf_status.soundfont_path:
+                fluidsynth_cmd = [
+                    exe,
+                    "-n",
                     "-i",
-                    str(source_path),
-                    "-vn",
-                    "-acodec",
-                    "pcm_s16le",
-                    "-ar",
-                    str(target_sample_rate_hz),
+                    "-T",
+                    "wav",
+                    "-O",
+                    "s16",
+                    "-F",
                     str(output_wav),
+                    "-r",
+                    str(target_sample_rate_hz),
+                    "-g",
+                    str(self._settings.music_engine_fluidsynth_gain),
+                    sf_status.soundfont_path,
+                    str(source_path),
                 ]
-            )
-            proc = await asyncio.to_thread(
-                subprocess.run,
-                cmd,
-                capture_output=True,
-                check=False,
-            )
-            if proc.returncode != 0:
-                err_msg = proc.stderr.decode("utf-8", errors="replace").strip()
-                raise AudioValidationError(
-                    "FFmpeg failed to decode audio stream; the file may be corrupted or truncated.",
-                    code="AUDIO_DECODE_FAILED",
-                    details={"ffmpeg_error": err_msg[:300]},
+                synth_proc = await asyncio.to_thread(
+                    subprocess.run,
+                    fluidsynth_cmd,
+                    capture_output=True,
+                    check=False,
                 )
-        elif ingested.metadata.detected_format == AudioFormat.WAV and trim_window is None:
-            shutil.copyfile(source_path, output_wav)
+                if synth_proc.returncode == 0 and output_wav.is_file() and output_wav.stat().st_size > 44:
+                    rendered_successfully = True
+
+            if not rendered_successfully:
+                # Synthesize acoustic preview via stdlib/numpy if fluidsynth is not yet configured
+                import mido
+                import numpy as np
+                import soundfile as sf
+                mid = mido.MidiFile(str(source_path))
+                total_duration_sec = max(1.0, float(mid.length))
+                total_samples = int(target_sample_rate_hz * total_duration_sec)
+                audio_buffer = np.zeros((total_samples, 2), dtype=np.float32)
+
+                curr_sec = 0.0
+                tempo = 500000
+                for trk in mid.tracks:
+                    track_sec = 0.0
+                    for msg in trk:
+                        track_sec += mido.tick2second(msg.time, mid.ticks_per_beat, tempo)
+                        if msg.type == "set_tempo":
+                            tempo = msg.tempo
+                        elif msg.type == "note_on" and getattr(msg, "velocity", 0) > 0:
+                            note_freq = 440.0 * (2.0 ** ((msg.note - 69) / 12.0))
+                            dur_sec = min(2.0, total_duration_sec - track_sec)
+                            n_samples = int(dur_sec * target_sample_rate_hz)
+                            start_idx = int(track_sec * target_sample_rate_hz)
+                            if n_samples > 0 and start_idx < total_samples:
+                                t = np.linspace(0, dur_sec, n_samples, endpoint=False)
+                                tone = 0.2 * np.sin(2.0 * np.pi * note_freq * t)
+                                end_idx = min(total_samples, start_idx + n_samples)
+                                audio_buffer[start_idx:end_idx, 0] += tone[: end_idx - start_idx]
+                                audio_buffer[start_idx:end_idx, 1] += tone[: end_idx - start_idx]
+
+                max_amp = np.max(np.abs(audio_buffer))
+                if max_amp > 0:
+                    audio_buffer = (audio_buffer / max_amp) * 0.8
+                sf.write(str(output_wav), audio_buffer, target_sample_rate_hz, subtype="PCM_16")
+
         else:
-            raise AudioValidationError(
-                "FFmpeg binary is required to decode or trim this audio file.",
-                code="DECODER_UNAVAILABLE",
-                status_code=503,
+            ffmpeg_path = shutil.which(self._settings.ffmpeg_bin) or (
+                self._settings.ffmpeg_bin if Path(self._settings.ffmpeg_bin).exists() else None
             )
+
+            if ffmpeg_path:
+                cmd = [
+                    ffmpeg_path,
+                    "-y",
+                    "-v",
+                    "error",
+                ]
+                if trim_window is not None:
+                    cmd.extend(["-ss", f"{trim_window.start_ms / 1000.0:.3f}"])
+                    if trim_window.end_ms is not None:
+                        cmd.extend(["-to", f"{trim_window.end_ms / 1000.0:.3f}"])
+                cmd.extend(
+                    [
+                        "-i",
+                        str(source_path),
+                        "-vn",
+                        "-acodec",
+                        "pcm_s16le",
+                        "-ar",
+                        str(target_sample_rate_hz),
+                        "-ac",
+                        "2",
+                        str(output_wav),
+                    ]
+                )
+                proc = await asyncio.to_thread(
+                    subprocess.run,
+                    cmd,
+                    capture_output=True,
+                    check=False,
+                )
+                if proc.returncode != 0:
+                    err_msg = proc.stderr.decode("utf-8", errors="replace").strip()
+                    raise AudioValidationError(
+                        "FFmpeg failed to decode media stream; the file may be corrupted, encrypted, or contain an unsupported codec.",
+                        code="AUDIO_DECODE_FAILED",
+                        details={"ffmpeg_error": err_msg[:300]},
+                    )
+            elif ingested.metadata.detected_format == AudioFormat.WAV and trim_window is None:
+                shutil.copyfile(source_path, output_wav)
+            else:
+                raise AudioValidationError(
+                    "FFmpeg binary is required to decode or trim this media file.",
+                    code="DECODER_UNAVAILABLE",
+                    status_code=503,
+                )
 
         if not output_wav.is_file() or output_wav.stat().st_size <= 44:
             raise AudioValidationError(

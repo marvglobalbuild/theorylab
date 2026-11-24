@@ -37,6 +37,12 @@ class JobTypeCapability(BaseModel):
 class EngineLimits(BaseModel):
     max_file_size_bytes: int
     max_duration_seconds: int
+    max_audio_file_size_bytes: int = 100 * 1024 * 1024
+    max_video_file_size_bytes: int = 250 * 1024 * 1024
+    max_midi_file_size_bytes: int = 20 * 1024 * 1024
+    max_audio_duration_seconds: int = 600
+    max_video_duration_seconds: int = 600
+    max_midi_duration_seconds: int = 1800
     max_concurrent_jobs_per_user: int
     target_internal_sample_rate_hz: int = 44100
     realistic_sample_playback_required: bool = True

@@ -13,6 +13,19 @@ class AudioFormat(str, Enum):
     AAC = "aac"
     OGG = "ogg"
     WEBM = "webm"
+    OPUS = "opus"
+    MP4 = "mp4"
+    MOV = "mov"
+    MKV = "mkv"
+    AVI = "avi"
+    MID = "mid"
+    MIDI = "midi"
+
+
+class MediaCategory(str, Enum):
+    AUDIO = "audio"
+    VIDEO = "video"
+    MIDI = "midi"
 
 
 class StorageBackendType(str, Enum):
@@ -46,19 +59,23 @@ class TrimWindow(BaseModel):
 
 
 class AudioMetadata(BaseModel):
-    """Verified audio stream properties produced by real FFprobe / header inspection."""
+    """Verified media stream properties produced by real FFprobe / MIDI inspection."""
 
     detected_format: AudioFormat
     mime_type: str
+    media_category: MediaCategory = MediaCategory.AUDIO
     size_bytes: int = Field(ge=1)
     sha256_checksum: str = Field(min_length=64, max_length=64)
     duration_ms: int = Field(ge=1)
-    sample_rate_hz: int = Field(ge=8000)
-    channels: int = Field(ge=1, le=16)
+    sample_rate_hz: int = Field(default=44100, ge=8000)
+    channels: int = Field(default=2, ge=1, le=16)
     codec_name: str
     bit_rate_bps: int | None = None
     bit_depth: int | None = None
     original_preserved: bool = True
+    video_extracted: bool = False
+    midi_track_count: int | None = None
+    midi_note_count: int | None = None
 
 
 class AudioValidationResponse(BaseModel):

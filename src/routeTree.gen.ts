@@ -31,6 +31,7 @@ import { Route as AdminLessonsRouteImport } from './routes/admin/lessons'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
 import { Route as LearnIndexRouteImport } from './routes/learn/index'
+import { Route as LearnAccompanimentRouteImport } from './routes/learn/accompaniment'
 import { Route as LearnAssessmentsRouteImport } from './routes/learn/assessments'
 import { Route as LearnCoursesRouteImport } from './routes/learn/courses'
 import { Route as LearnEarTrainingRouteImport } from './routes/learn/ear-training'
@@ -161,6 +162,11 @@ const LearnIndexRoute = LearnIndexRouteImport.update({
   path: '/',
   getParentRoute: () => LearnRouteRoute,
 } as any)
+const LearnAccompanimentRoute = LearnAccompanimentRouteImport.update({
+  id: '/accompaniment',
+  path: '/accompaniment',
+  getParentRoute: () => LearnRouteRoute,
+} as any)
 const LearnAssessmentsRoute = LearnAssessmentsRouteImport.update({
   id: '/assessments',
   path: '/assessments',
@@ -278,6 +284,7 @@ export interface FileRoutesByFullPath {
   '/admin/lessons': typeof AdminLessonsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
+  '/learn/accompaniment': typeof LearnAccompanimentRoute
   '/learn/assessments': typeof LearnAssessmentsRoute
   '/learn/courses': typeof LearnCoursesRoute
   '/learn/ear-training': typeof LearnEarTrainingRoute
@@ -318,6 +325,7 @@ export interface FileRoutesByTo {
   '/admin/lessons': typeof AdminLessonsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
+  '/learn/accompaniment': typeof LearnAccompanimentRoute
   '/learn/assessments': typeof LearnAssessmentsRoute
   '/learn/courses': typeof LearnCoursesRoute
   '/learn/ear-training': typeof LearnEarTrainingRoute
@@ -362,6 +370,7 @@ export interface FileRoutesById {
   '/admin/lessons': typeof AdminLessonsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
+  '/learn/accompaniment': typeof LearnAccompanimentRoute
   '/learn/assessments': typeof LearnAssessmentsRoute
   '/learn/courses': typeof LearnCoursesRoute
   '/learn/ear-training': typeof LearnEarTrainingRoute
@@ -407,6 +416,7 @@ export interface FileRouteTypes {
     | '/admin/lessons'
     | '/admin/settings'
     | '/admin/users'
+    | '/learn/accompaniment'
     | '/learn/assessments'
     | '/learn/courses'
     | '/learn/ear-training'
@@ -447,6 +457,7 @@ export interface FileRouteTypes {
     | '/admin/lessons'
     | '/admin/settings'
     | '/admin/users'
+    | '/learn/accompaniment'
     | '/learn/assessments'
     | '/learn/courses'
     | '/learn/ear-training'
@@ -490,6 +501,7 @@ export interface FileRouteTypes {
     | '/admin/lessons'
     | '/admin/settings'
     | '/admin/users'
+    | '/learn/accompaniment'
     | '/learn/assessments'
     | '/learn/courses'
     | '/learn/ear-training'
@@ -685,6 +697,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LearnIndexRouteImport
       parentRoute: typeof LearnRouteRoute
     }
+    '/learn/accompaniment': {
+      id: '/learn/accompaniment'
+      path: '/accompaniment'
+      fullPath: '/learn/accompaniment'
+      preLoaderRoute: typeof LearnAccompanimentRouteImport
+      parentRoute: typeof LearnRouteRoute
+    }
     '/learn/assessments': {
       id: '/learn/assessments'
       path: '/assessments'
@@ -848,6 +867,7 @@ const AdminRouteRouteWithChildren = AdminRouteRoute._addFileChildren(
 )
 
 interface LearnRouteRouteChildren {
+  LearnAccompanimentRoute: typeof LearnAccompanimentRoute
   LearnAssessmentsRoute: typeof LearnAssessmentsRoute
   LearnCoursesRoute: typeof LearnCoursesRoute
   LearnEarTrainingRoute: typeof LearnEarTrainingRoute
@@ -864,6 +884,7 @@ interface LearnRouteRouteChildren {
 }
 
 const LearnRouteRouteChildren: LearnRouteRouteChildren = {
+  LearnAccompanimentRoute: LearnAccompanimentRoute,
   LearnAssessmentsRoute: LearnAssessmentsRoute,
   LearnCoursesRoute: LearnCoursesRoute,
   LearnEarTrainingRoute: LearnEarTrainingRoute,

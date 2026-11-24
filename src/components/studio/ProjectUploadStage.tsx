@@ -61,14 +61,30 @@ export function ProjectUploadStage({
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentSec, setCurrentSec] = useState(0);
   const [durationSec, setDurationSec] = useState(0);
+  const [mediaMode, setMediaMode] = useState<"audio" | "video" | "midi">("audio");
 
   const allowedFormats = capabilities?.supported_formats
     .filter((f) => f.decode_supported)
     .map((f) => f.format) ?? ["wav", "mp3", "flac", "m4a", "aac", "ogg", "webm"];
 
-  const maxBytes = capabilities?.limits.max_file_size_bytes ?? DEFAULT_MAX_AUDIO_FILE_SIZE_BYTES;
-  const maxDurationSeconds = capabilities?.limits.max_duration_seconds ?? 900;
-  const acceptAttr = allowedFormats.map((f) => `.${f}`).join(",") + ",audio/*";
+  const maxBytes =
+    mediaMode === "video"
+      ? (capabilities?.limits.max_video_file_size_bytes ?? 250 * 1024 * 1024)
+      : mediaMode === "midi"
+        ? (capabilities?.limits.max_midi_file_size_bytes ?? 20 * 1024 * 1024)
+        : (capabilities?.limits.max_audio_file_size_bytes ?? capabilities?.limits.max_file_size_bytes ?? DEFAULT_MAX_AUDIO_FILE_SIZE_BYTES);
+
+  const maxDurationSeconds =
+    mediaMode === "midi"
+      ? (capabilities?.limits.max_midi_duration_seconds ?? 1800)
+      : (capabilities?.limits.max_audio_duration_seconds ?? capabilities?.limits.max_duration_seconds ?? 600);
+
+  const acceptAttr =
+    mediaMode === "video"
+      ? ".mp4,.mov,.webm,.mkv,.avi,video/*"
+      : mediaMode === "midi"
+        ? ".mid,.midi,audio/midi"
+        : allowedFormats.map((f) => `.${f}`).join(",") + ",audio/*";
 
   useEffect(() => {
     if (!selectedFile) {
@@ -106,10 +122,10 @@ export function ProjectUploadStage({
   const handleCandidateFile = (file: File | null) => {
     if (!file) return;
     stopLocalPreview();
-    const check = validateAudioFileForUpload(file, maxBytes, allowedFormats);
+    const check = validateAudioFileForUpload(file, maxBytes, allowedFormats, mediaMode);
     if (!check.valid) {
-      setLocalError(check.message ?? "Invalid audio file.");
-      onSelectFile(null, check.message ?? "Invalid audio file.");
+      setLocalError(check.message ?? "Invalid file.");
+      onSelectFile(null, check.message ?? "Invalid file.");
       return;
     }
     setLocalError(null);
@@ -159,17 +175,85 @@ export function ProjectUploadStage({
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border pb-4">
         <div>
-          <p className="eyebrow text-crimson-deep">Stage 01 · Vocal Input</p>
+          <p className="eyebrow text-crimson-deep">Stage 01 · Media &amp; Melody Input</p>
           <h2 id="stage-a-heading" className="type-display-md mt-1 text-foreground">
             Start a project
           </h2>
         </div>
         <p className="text-xs text-muted-foreground tabular-nums">
-          Audio only: {allowedFormats.map((f) => f.toUpperCase()).join(", ")} · Max{" "}
-          {Math.round(maxBytes / (1024 * 1024))} MB · Up to {Math.floor(maxDurationSeconds / 60)}{" "}
-          min
+          {mediaMode === "video" ? (
+            <>Video: MP4, MOV, WebM, MKV, AVI · Max 250 MB · Up to 10 min</>
+          ) : mediaMode === "midi" ? (
+            <>MIDI: MID, MIDI · Max 20 MB · Up to 30 min</>
+          ) : (
+            <>Audio: {allowedFormats.map((f) => f.toUpperCase()).join(", ")} · Max {Math.round(maxBytes / (1024 * 1024))} MB · Up to {Math.floor(maxDurationSeconds / 60)} min</>
+          )}
         </p>
       </div>
+
+      {/* Input media selector */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-foreground">Input format:</span>
+        <div className="inline-flex rounded-[2px] border border-border bg-background p-0.5">
+          <button
+            type="button"
+            onClick={() => {
+              setMediaMode("audio");
+              setLocalError(null);
+            }}
+            className={cn(
+              "px-3 py-1 text-xs font-medium rounded-[2px] transition-colors",
+              mediaMode === "audio"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            Audio (Vocal / Instrument)
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMediaMode("video");
+              setLocalError(null);
+            }}
+            className={cn(
+              "px-3 py-1 text-xs font-medium rounded-[2px] transition-colors",
+              mediaMode === "video"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            Video (Audio Extracted)
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMediaMode("midi");
+              setLocalError(null);
+            }}
+            className={cn(
+              "px-3 py-1 text-xs font-medium rounded-[2px] transition-colors",
+              mediaMode === "midi"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            MIDI (Direct Arrangement)
+          </button>
+        </div>
+      </div>
+
+      {/* Informative category badge */}
+      {mediaMode === "video" && (
+        <div className="rounded-[2px] border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-foreground">
+          <strong>Video Input:</strong> SONORA automatically extracts the high-resolution audio stream for musical analysis and accompaniment generation. Original video files are preserved untouched.
+        </div>
+      )}
+      {mediaMode === "midi" && (
+        <div className="rounded-[2px] border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-foreground">
+          <strong>MIDI Input:</strong> Direct symbolic workflow. SONORA parses melody notes, tracks, tempos, and time signatures directly from your MIDI file without vocal pitch estimation.
+        </div>
+      )}
 
       {/* Project name */}
       <div className="max-w-lg space-y-1.5">
@@ -207,10 +291,18 @@ export function ProjectUploadStage({
           >
             <Upload className="size-6 text-primary" aria-hidden />
             <p className="mt-3 text-sm font-medium text-foreground">
-              Drop a vocal audio recording here, or browse your device
+              {mediaMode === "video"
+                ? "Drop a video file containing audio here, or browse your device"
+                : mediaMode === "midi"
+                  ? "Drop a standard .mid or .midi file here, or browse your device"
+                  : "Drop a vocal audio recording here, or browse your device"}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Your original recording is stored privately under your account and never overwritten.
+              {mediaMode === "video"
+                ? "SONORA extracts the audio stream for accompaniment generation while preserving your original video."
+                : mediaMode === "midi"
+                  ? "Parsed directly: melody, notes, tempo, and key are processed symbolically and synthesized via FluidSynth."
+                  : "Your original recording is stored privately under your account and never overwritten."}
             </p>
             <input
               ref={fileInputRef}
@@ -232,7 +324,11 @@ export function ProjectUploadStage({
               onClick={() => fileInputRef.current?.click()}
               className="mt-4"
             >
-              Choose audio file
+              {mediaMode === "video"
+                ? "Choose video file"
+                : mediaMode === "midi"
+                  ? "Choose MIDI file"
+                  : "Choose audio file"}
             </Button>
           </div>
 
@@ -257,11 +353,21 @@ export function ProjectUploadStage({
               <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
                 {verifiedMetadata ? (
                   <>
-                    {verifiedMetadata.detected_format.toUpperCase()} ·{" "}
+                    {verifiedMetadata.detected_format.toUpperCase()}
+                    {verifiedMetadata.video_extracted ? " (Audio Extracted)" : ""} ·{" "}
                     {formatDurationMs(verifiedMetadata.duration_ms)} ·{" "}
-                    {(verifiedMetadata.sample_rate_hz / 1000).toFixed(1)} kHz ·{" "}
-                    {verifiedMetadata.channels === 1 ? "Mono" : `${verifiedMetadata.channels} ch`} ·{" "}
-                    {formatBytes(verifiedMetadata.size_bytes)}
+                    {verifiedMetadata.media_category === "midi" ? (
+                      <>
+                        {verifiedMetadata.midi_track_count ?? 1} tracks ·{" "}
+                        {verifiedMetadata.midi_note_count ?? 0} notes
+                      </>
+                    ) : (
+                      <>
+                        {(verifiedMetadata.sample_rate_hz / 1000).toFixed(1)} kHz ·{" "}
+                        {verifiedMetadata.channels === 1 ? "Mono" : `${verifiedMetadata.channels} ch`}
+                      </>
+                    )}{" "}
+                    · {formatBytes(verifiedMetadata.size_bytes)}
                   </>
                 ) : selectedFile ? (
                   <>

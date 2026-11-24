@@ -13,7 +13,7 @@ from app.core.errors import InstrumentResourceError
 
 InstrumentFamily = Literal["piano", "strings", "bass", "brass", "woodwinds", "drums"]
 
-_SAFE_BIN_RE = re.compile(r"^[A-Za-z0-9._/+-]+$")
+_SAFE_BIN_RE = re.compile(r"^[A-Za-z0-9._/+:\\ -]+$")
 
 # Standard General MIDI Percussion Note Numbers (Channel 9 / 1-based Channel 10)
 GM_DRUM_KICK = 36
@@ -316,6 +316,10 @@ class InstrumentResourceManager:
             configured_dir = self._settings.music_engine_soundfont_dir.strip()
             if configured_dir:
                 search_dirs.append(Path(configured_dir))
+            local_soundfonts_dir = Path(__file__).resolve().parent.parent.parent / "soundfonts"
+            if local_soundfonts_dir.is_dir():
+                search_dirs.append(local_soundfonts_dir)
+
             # Standard read-only system locations (searched only if explicit path was not set)
             for sys_dir in (
                 Path("/opt/sonora/soundfonts"),

@@ -28,9 +28,15 @@ class Settings(BaseSettings):
     music_engine_log_level: str = "INFO"
     music_engine_cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
-    # Audio processing & resource limits
-    music_engine_max_file_size_bytes: int = Field(default=100 * 1024 * 1024, ge=1024)
-    music_engine_max_duration_seconds: int = Field(default=900, ge=1)
+    # Media processing & resource limits (Audio: 100MB / 10m, Video: 250MB / 10m, MIDI: 20MB / 30m)
+    music_engine_max_audio_file_size_bytes: int = Field(default=100 * 1024 * 1024, ge=1024)
+    music_engine_max_video_file_size_bytes: int = Field(default=250 * 1024 * 1024, ge=1024)
+    music_engine_max_midi_file_size_bytes: int = Field(default=20 * 1024 * 1024, ge=1024)
+    music_engine_max_file_size_bytes: int = Field(default=250 * 1024 * 1024, ge=1024)
+    music_engine_max_audio_duration_seconds: int = Field(default=600, ge=1)
+    music_engine_max_video_duration_seconds: int = Field(default=600, ge=1)
+    music_engine_max_midi_duration_seconds: int = Field(default=1800, ge=1)
+    music_engine_max_duration_seconds: int = Field(default=600, ge=1)
     music_engine_max_concurrent_jobs_per_user: int = Field(default=3, ge=1, le=20)
     music_engine_temp_dir: str = "/tmp/sonora-music-engine"
     music_engine_local_storage_dir: str = "/tmp/sonora-local-storage"

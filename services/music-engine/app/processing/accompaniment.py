@@ -16,10 +16,15 @@ from app.processing.interfaces import (
     DecodedAudio,
     PitchExtractionInterface,
 )
-from app.processing.midi import MidoMIDIBuilder
+from app.processing.midi import (
+    MIDITrackSpec,
+    MidoMIDIBuilder,
+    parse_midi_file,
+    parsed_midi_to_analysis_and_pitch,
+)
 from app.processing.mixing import MixAndExportConfig, SonoraAudioMixerAndMaster
 from app.processing.synthesis import FluidSynthRenderer
-from app.schemas.audio import AudioFormat
+from app.schemas.audio import AudioFormat, MediaCategory
 from app.schemas.jobs import JobArtifactRef, JobResponse
 from app.storage.base import StorageAdapter, UserStoragePathGuard
 
@@ -108,9 +113,9 @@ class AccompanimentOrchestrator:
             for k, v in src.items():
                 if k in known_fields:
                     merged[k] = v
-            # Convenience singular `output_format` alias -> `output_formats`
-            if "output_format" in src and "output_formats" not in src:
-                merged["output_formats"] = [src["output_format"]]
+            # Convenience singular `output_format` / `master_format` alias -> `output_formats`
+            if ("output_format" in src or "master_format" in src) and "output_formats" not in src:
+                merged["output_formats"] = [src.get("output_format") or src.get("master_format")]
 
         # Normalize string formats like "wav" / "flac" / "mp3"
         if isinstance(merged.get("output_formats"), list):
@@ -166,16 +171,45 @@ class AccompanimentOrchestrator:
         analysis_opts = job.parameters.get("analysis_options")
         pitch_opts = job.parameters.get("pitch_options")
 
-        # Stage 1 & 2: Run 1 musical analysis + monophonic vocal pitch extraction
-        analysis_res = await self._analysis.analyze(
-            decoded,
-            options=analysis_opts if isinstance(analysis_opts, dict) else None,
+        is_midi_input = (
+            getattr(decoded.source_metadata, "media_category", None) == MediaCategory.MIDI
+            or decoded.source_metadata.detected_format in {AudioFormat.MID, AudioFormat.MIDI}
         )
-        pitch_res = await self._pitch.extract_pitch(
-            decoded,
-            mode="monophonic",
-            options=pitch_opts if isinstance(pitch_opts, dict) else None,
-        )
+
+        parsed_midi_song = None
+        if is_midi_input:
+            # Phase 5: Direct symbolic MIDI parsing pathway - bypass audio/vocal pYIN pitch analysis
+            midi_candidates = [
+                workspace_dir / "source_working_copy.mid",
+                workspace_dir / "source_working_copy.midi",
+                *workspace_dir.glob("*.mid"),
+                *workspace_dir.glob("*.midi"),
+            ]
+            midi_src = next((p for p in midi_candidates if p.is_file()), None)
+            if not midi_src:
+                raise ValidationError(
+                    "Original input MIDI file is missing from job workspace.",
+                    code="MISSING_INPUT_MIDI",
+                )
+
+            parsed_midi_song = parse_midi_file(midi_src)
+            analysis_res, pitch_res = parsed_midi_to_analysis_and_pitch(parsed_midi_song)
+
+            if config.tempo_override_bpm is not None:
+                analysis_res.tempo_bpm = config.tempo_override_bpm
+            if config.key_override:
+                analysis_res.estimated_key = config.key_override
+        else:
+            # Standard Audio & Video pathway: Run 1 musical analysis + monophonic vocal pitch extraction
+            analysis_res = await self._analysis.analyze(
+                decoded,
+                options=analysis_opts if isinstance(analysis_opts, dict) else None,
+            )
+            pitch_res = await self._pitch.extract_pitch(
+                decoded,
+                mode="monophonic",
+                options=pitch_opts if isinstance(pitch_opts, dict) else None,
+            )
 
         # Stage 3: Theory-driven accompaniment arrangement
         plan = self._arranger.arrange(
@@ -199,9 +233,26 @@ class AccompanimentOrchestrator:
             )
 
         # Stage 4: Build multi-track Standard MIDI File
+        # If input is MIDI, preserve all original tracks alongside generated accompaniment tracks!
+        final_midi_tracks: list[MIDITrackSpec] = []
+        if is_midi_input and parsed_midi_song and parsed_midi_song.tracks:
+            for orig_trk in parsed_midi_song.tracks:
+                if orig_trk.notes:
+                    final_midi_tracks.append(
+                        MIDITrackSpec(
+                            instrument_id=f"input_{orig_trk.track_index}",
+                            track_name=f"Original: {orig_trk.track_name}",
+                            gm_program=orig_trk.program,
+                            channel=orig_trk.channel,
+                            is_percussion=orig_trk.is_percussion,
+                            notes=orig_trk.notes,
+                        )
+                    )
+        final_midi_tracks.extend(plan.tracks)
+
         midi_local_path = workspace_dir / "accompaniment.mid"
         midi_res = await self._midi.build_multitrack_midi(
-            tracks=plan.tracks,
+            tracks=final_midi_tracks,
             tempo_bpm=plan.tempo_bpm,
             time_signature=plan.time_signature,
             key_signature=plan.key,
