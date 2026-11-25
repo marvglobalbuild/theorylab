@@ -221,10 +221,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
+const DEFAULT_AUTH_CONTEXT: AuthContextValue = {
+  initialized: false,
+  loading: true,
+  configured: true,
+  session: null,
+  error: null,
+  recoveryMode: false,
+  hasRole: () => false,
+  refreshSession: async () => null,
+  signOut: async () => {},
+  setSessionDirect: () => {},
+  enterPresentationDemo: () => ({
+    userId: "presenter-demo-guest",
+    email: "demo@theorylab.internal",
+    role: "independent_learner",
+    roles: ["independent_learner"],
+    displayName: "Guest Presenter (Demo)",
+    preferredLevel: "intermediate",
+    accountStatus: "active",
+    emailVerified: true,
+    profileComplete: true,
+  }),
+  clearRecoveryMode: () => {},
+};
+
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
   if (!ctx) {
-    throw new Error("useAuth must be used inside <AuthProvider>.");
+    return DEFAULT_AUTH_CONTEXT;
   }
   return ctx;
 }
