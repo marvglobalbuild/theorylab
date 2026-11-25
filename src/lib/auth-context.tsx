@@ -79,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (seq !== seqRef.current) return null;
 
     if (res.status === "unavailable") {
-      setConfigured(false);
+      setConfigured(isConfigured);
       setSession(null);
       setError(null);
     } else if (res.status === "error") {

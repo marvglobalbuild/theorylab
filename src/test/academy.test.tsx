@@ -278,6 +278,20 @@ describe("supabaseAcademyService", () => {
     }
   });
 
+  it("falls back to canonical catalog when remote DB returns schema permission denied (42501)", async () => {
+    const { client } = createMockSupabaseForAcademy({
+      queryError: { message: "permission denied for schema public", code: "42501" } as any,
+    });
+    const svc = createSupabaseAcademyService(client);
+    const cat = await svc.getCatalog("user-123");
+
+    expect(cat.status).toBe("ok");
+    if (cat.status === "ok") {
+      expect(cat.data.lessons).toHaveLength(46);
+      expect(cat.data.paths).toHaveLength(4);
+    }
+  });
+
   it("enforces published-only curriculum hierarchy and persists completion into lesson_progress", async () => {
     const { client, upsertSingle } = createMockSupabaseForAcademy({
       paths: [

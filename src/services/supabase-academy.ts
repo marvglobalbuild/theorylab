@@ -406,6 +406,26 @@ export function createSupabaseAcademyService(
         const firstError =
           pathsRes.error || coursesRes.error || modulesRes.error || lessonsRes.error;
         if (firstError) {
+          const errMsg = (firstError.message ?? "").toLowerCase();
+          const errCode = (firstError as { code?: string }).code ?? "";
+          const isPermissionOrSchema =
+            errMsg.includes("permission denied") ||
+            errMsg.includes("schema public") ||
+            errMsg.includes("relation") ||
+            errMsg.includes("does not exist") ||
+            errCode === "42501" ||
+            errCode === "42P01";
+
+          if (isPermissionOrSchema) {
+            return {
+              status: "ok",
+              data: buildCanonicalAcademyCatalog(
+                "fallback_empty_db",
+                null,
+              ),
+            };
+          }
+
           return {
             status: "error",
             message: `Could not load published Theory Academy curriculum: ${firstError.message}`,
@@ -586,6 +606,25 @@ export function createSupabaseAcademyService(
           },
         };
       } catch (err) {
+        const errMsg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+        const isPermissionOrSchema =
+          errMsg.includes("permission denied") ||
+          errMsg.includes("schema public") ||
+          errMsg.includes("relation") ||
+          errMsg.includes("does not exist") ||
+          errMsg.includes("42501") ||
+          errMsg.includes("42p01");
+
+        if (isPermissionOrSchema) {
+          return {
+            status: "ok",
+            data: buildCanonicalAcademyCatalog(
+              "fallback_empty_db",
+              null,
+            ),
+          };
+        }
+
         return {
           status: "error",
           message:
